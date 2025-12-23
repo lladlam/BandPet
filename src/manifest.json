@@ -1,0 +1,74 @@
+{
+  "package": "com.lladlam.bandpet.9pro",
+  "name": "BandPet",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "minPlatformVersion": 1000,
+  "icon": "/common/icon.png",
+  "deviceTypeList": [
+    "watch"
+  ],
+  "features": [
+    {
+      "name": "system.router"
+    },
+    {
+      "name": "system.device"
+    },
+    {
+      "name": "system.fetch"
+    },
+    {
+      "name": "system.storage"
+    },
+    {
+      "name": "hapjs.permission.DEVICE_INFO"
+    },
+    {
+      "name": "system.vibrator"
+    }
+  ],
+  "config": {
+    "logLevel": "log",
+    "designWidth": 336
+  },
+  "router": {
+    "entry": "main",
+    "pages": {
+      "main": {
+        "component": "index"
+      },
+      "more": {
+        "component": "index"
+      },
+      "leaderboard": {
+        "component": "index"
+      },
+      "exchange": {
+        "component": "index"
+      },
+      "market": {
+        "component": "index"
+      },
+      "customize": {
+        "component": "index"
+      },
+      "settings": {
+        "component": "index"
+      },
+      "activate": {
+        "component": "index"
+      },
+      "about": {
+        "component": "index"
+      },
+      "naming": {
+        "component": "index"
+      }
+    }
+  },
+  "display": {
+    "backgroundColor": "#000000",
+    "textColor": "#ffffff"
+  }
+}

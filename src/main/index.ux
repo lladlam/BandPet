@@ -1,0 +1,279 @@
+<template>
+  <div class="container">
+    <text class="time">{{ time }}</text>
+    <div class="left-chest" onclick="claimChest(0)">
+      <text class="chest-label">宝箱</text>
+      <text show="{{!chests[0].claimed}}" class="chest-cost">花费: 1000</text>
+      <text show="{{chests[0].claimed}}" class="chest-timer">{{ chests[0].timerDisplay }}</text>
+    </div>
+    <div class="right-chest" onclick="claimChest(1)">
+      <text class="chest-label">宝箱</text>
+      <text show="{{!chests[1].claimed}}" class="chest-cost">花费: 1000</text>
+      <text show="{{chests[1].claimed}}" class="chest-timer">{{ chests[1].timerDisplay }}</text>
+    </div>
+    <div class="pet-container" onclick="incrementClick">
+      <image class="pet-image" src="{{ petImage }}"></image>
+      <text class="pet-name">{{ petName }}</text>
+    </div>
+    <div class="bottom-bar">
+<image src="../common/more.png" class="more-button" onclick="openMore"></image>
+      <div class="click-counter">
+        <text class="click-counter-text">{{ clickCount }}</text>
+      </div>
+    </div>
+  </div>
+</template>
+
+<style>
+  .container {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: #000000;
+  }
+  .time {
+    position: absolute;
+    top: 14px;
+    color: #FFFFFF;
+    font-size: 21px;
+  }
+  .left-chest, .right-chest {
+    position: absolute;
+    width: 105px;
+    height: 105px;
+    background-color: #DAA520; /* GoldenRod */
+    border-radius: 10.5px;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    padding: 7px;
+  }
+  .left-chest {
+    top: 70px;
+    left: 14px;
+  }
+  .right-chest {
+    top: 70px;
+    right: 14px;
+  }
+  .chest-progress {
+    color: #FFF;
+    font-size: 24px;
+    margin-bottom: 5px;
+  }
+  .chest-label {
+    font-size: 28px;
+    color: #000000;
+    margin-bottom: 7px;
+  }
+  .chest-cost {
+    color: #000000;
+    font-size: 16.8px;
+  }
+  .chest-timer {
+    color: #000000;
+    font-size: 16.8px;
+  }
+  .pet-container {
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    width: 210px;
+    height: 210px;
+  }
+  .pet-image {
+    width: 210px; /* 140 * 1.5 */
+    height: 210px; /* 140 * 1.5 */
+    object-fit: contain;
+  }
+  .pet-name {
+    color: #888888;
+    font-size: 28px;
+    margin-top: 20px; /* Increased from 10px to 20px */
+  }
+  .bottom-bar {
+    position: absolute;
+    bottom: 21px;
+    width: 100%;
+    justify-content: space-around;
+    align-items: center;
+  }
+  .more-button {
+    width: 56px;
+    height: 56px;
+    border-radius: 28px;
+    background-color: #1A1A1A;
+    justify-content: center;
+    align-items: center;
+  }
+  .more-button-text {
+    color: #FFFFFF;
+    font-size: 35px;
+  }
+  .click-counter {
+    width: 140px;
+    height: 56px;
+    border-radius: 28px;
+    background-color: #1A1A1A;
+    justify-content: center;
+    align-items: center;
+  }
+  .click-counter-text {
+    color: #FFFFFF;
+    font-size: 28px;
+  }
+</style>
+
+<script>
+  import router from '@system.router';
+  import storage from '@system.storage';
+  import ApiService from '../common/js/api-service.js';
+  import { CONFIG } from '../common/js/config.js';
+  import { auth } from '../common/js/auth.js';
+
+  export default {
+    data: {
+      time: '00:00',
+      petName: '(宠物名称)',
+      clickCount: 0,
+      pendingClicks: 0,
+      userId: null,
+      isActivated: false,
+      petImage: '/common/Ra0.png', // Add this line
+      chests: [
+        { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' },
+        { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' }
+      ]
+    },
+    async onInit() {
+      this.updateTime();
+      this.loadClicks();
+      this.loadChestStates();
+      
+      const { isActivated, userInfo } = await auth.getActivationState();
+      this.isActivated = isActivated;
+      
+      if (isActivated && userInfo) {
+        this.userId = userInfo.id;
+        this.petName = userInfo.pet_name || '(无名)';
+        this.clickCount = userInfo.click_count || this.clickCount;
+        
+        setInterval(this.syncClicks.bind(this), CONFIG.APP.SYNC_INTERVAL);
+        this.syncClicks();
+      }
+
+      setInterval(this.updateTime, 1000 * 60);
+      setInterval(this.updateChestTimers.bind(this), 1000);
+    },
+    loadClicks() {
+      storage.get({
+        key: CONFIG.STORAGE_KEYS.PENDING_CLICKS,
+        success: (data) => { this.pendingClicks = parseInt(data) || 0; }
+      });
+      storage.get({
+        key: CONFIG.STORAGE_KEYS.TOTAL_CLICKS,
+        success: (data) => {
+          if (!this.isActivated) {
+             this.clickCount = parseInt(data) || 0;
+          }
+        }
+      });
+    },
+    loadChestStates() {
+      storage.get({
+        key: 'chestStates',
+        success: (data) => {
+          if (data) {
+            const loadedChests = JSON.parse(data);
+            this.chests = loadedChests.map(chest => {
+              if (chest.refreshTimestamp > 0 && chest.claimed) {
+                const remainingTime = Math.max(0, chest.refreshTimestamp - Date.now());
+                if (remainingTime <= 0) {
+                  chest.claimed = false;
+                  chest.refreshTimestamp = 0;
+                }
+              }
+              return chest;
+            });
+          }
+        }
+      });
+    },
+    saveChestStates() {
+      storage.set({ key: 'chestStates', value: JSON.stringify(this.chests) });
+    },
+    updateTime() {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      this.time = `${hours}:${minutes}`;
+    },
+    updateChestTimers() {
+      this.chests.forEach((chest, index) => {
+        if (chest.claimed && chest.refreshTimestamp > 0) {
+          const remainingTime = Math.max(0, chest.refreshTimestamp - Date.now());
+          this.chests[index].timerDisplay = this.formatTime(remainingTime / 1000);
+          if (remainingTime <= 0) {
+            this.chests[index].claimed = false;
+            this.chests[index].refreshTimestamp = 0;
+            this.saveChestStates();
+          }
+        }
+      });
+    },
+    formatTime(seconds) {
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = Math.floor(seconds % 60);
+      return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
+    },
+    incrementClick() {
+      this.clickCount++;
+      this.pendingClicks++;
+      storage.set({ key: CONFIG.STORAGE_KEYS.PENDING_CLICKS, value: this.pendingClicks.toString() });
+      storage.set({ key: CONFIG.STORAGE_KEYS.TOTAL_CLICKS, value: this.clickCount.toString() });
+
+      // Randomly switch pet image to Ra1 or Ra2
+      const randomImage = Math.random() < 0.5 ? '/common/Ra1.png' : '/common/Ra2.png';
+      this.petImage = randomImage;
+
+      // Reset to Ra0 after a short delay
+      setTimeout(() => {
+        this.petImage = '/common/Ra0.png';
+      }, 200);
+    },
+    claimChest(index) {
+      const chest = this.chests[index];
+      if (chest.claimed) {
+        console.log('Chest is on cooldown.');
+        return;
+      }
+      if (this.clickCount >= 1000) {
+        this.clickCount -= 1000;
+        const reward = Math.floor(Math.random() * 500) + 100;
+        this.clickCount += reward;
+        storage.set({ key: CONFIG.STORAGE_KEYS.TOTAL_CLICKS, value: this.clickCount.toString() });
+        console.log(`Chest ${index} claimed! Rewarded ${reward} clicks.`);
+        this.chests[index].claimed = true;
+        this.chests[index].refreshTimestamp = Date.now() + (30 * 60 * 1000);
+        this.saveChestStates();
+      } else {
+        console.log('Not enough clicks to open chest.');
+      }
+    },
+    async syncClicks() {
+      if (!this.isActivated || !this.userId || this.pendingClicks === 0) {
+        return;
+      }
+      const result = await ApiService.syncClicks(this.userId, this.pendingClicks);
+      if (result.success) {
+        this.pendingClicks = 0;
+        storage.set({ key: CONFIG.STORAGE_KEYS.PENDING_CLICKS, value: '0' });
+      }
+    },
+    openMore() {
+      router.push({
+        uri: 'more'
+      });
+    }
+  }
+</script>

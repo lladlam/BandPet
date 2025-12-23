@@ -1,0 +1,416 @@
+<template>
+  <div class="page-container">
+    <div class="page-header-container">
+      <div class="page-header">
+        <image src="../common/back.png" class="page-header-back-button" onclick="goBack"></image>
+        <div class="header-title-time">
+          <text class="page-time-display">{{ time }}</text>
+          <text class="page-header-title">激活</text>
+        </div>
+      </div>
+    </div>
+    
+    <scroll class="content-scroll-container">
+      <div class="page-content">
+        <div class="device-code-section">
+          <text>您的设备码为</text>
+          <div class="code-box">
+            <text>{{ deviceCode }}</text>
+          </div>
+        </div>
+        <div class="activation-code-section">
+          <text>激活码</text>
+          <div class="input-box">
+            <text>{{ activationCode || '点击输入' }}</text>
+          </div>
+        </div>
+
+        <div class="actions">
+          <!-- T9 Keyboard -->
+          <div class="t9-keyboard">
+            <div class="keyboard-row">
+              <div class="key" onclick="handleKeyClick({detail: {value: '1'}})">
+                <image src="../common/1.png" class="key-icon"></image>
+              </div>
+              <div class="key" onclick="handleKeyClick({detail: {value: '2'}})">
+                <image src="../common/2.png" class="key-icon"></image>
+              </div>
+              <div class="key" onclick="handleKeyClick({detail: {value: '3'}})">
+                <image src="../common/3.png" class="key-icon"></image>
+              </div>
+            </div>
+            <div class="keyboard-row">
+              <div class="key" onclick="handleKeyClick({detail: {value: '4'}})">
+                <image src="../common/4.png" class="key-icon"></image>
+              </div>
+              <div class="key" onclick="handleKeyClick({detail: {value: '5'}})">
+                <image src="../common/5.png" class="key-icon"></image>
+              </div>
+              <div class="key" onclick="handleKeyClick({detail: {value: '6'}})">
+                <image src="../common/6.png" class="key-icon"></image>
+              </div>
+            </div>
+            <div class="keyboard-row">
+              <div class="key" onclick="handleKeyClick({detail: {value: '7'}})">
+                <image src="../common/7.png" class="key-icon"></image>
+              </div>
+              <div class="key" onclick="handleKeyClick({detail: {value: '8'}})">
+                <image src="../common/8.png" class="key-icon"></image>
+              </div>
+              <div class="key" onclick="handleKeyClick({detail: {value: '9'}})">
+                <image src="../common/9.png" class="key-icon"></image>
+              </div>
+            </div>
+            <div class="keyboard-row">
+              <div class="key" onclick="handleKeyClick({detail: {value: '⌫'}})">
+                <image src="../common/del.png" class="key-icon"></image>
+              </div>
+              <div class="key" onclick="handleKeyClick({detail: {value: '0'}})">
+                <image src="../common/0.png" class="key-icon"></image>
+              </div>
+              <div class="key" onclick="handleKeyClick({detail: {value: '✓'}})">
+                <image src="../common/SmallCheck.png" class="key-icon"></image>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </scroll>
+
+    <text class="status-text">{{ statusMessage }}</text>
+  </div>
+</template>
+
+<style>
+  /* ... existing styles ... */
+  .page-container {
+    flex-direction: column;
+    align-items: center;
+    background-color: #000000;
+    width: 100%;
+    height: 100%;
+  }
+  .page-header-container {
+    width: 100%;
+    /* No align-items: center here, let page-header handle it */
+    margin-bottom: 20px;
+  }
+  .page-time-display {
+    color: #FFFFFF;
+    font-size: 24px;
+    margin-bottom: 2px;
+    margin-top: 0;
+  }
+  .page-header {
+    width: 100%;
+    height: 90px;
+    padding: 0 20px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start; /* Align items to the start */
+    margin-top: 10px;
+  }
+  .page-header-back-button {
+    width: 80px;
+    height: 80px;
+    margin-right: 10px; /* Add some space between back button and title/time */
+  }
+  .page-header-title {
+    color: #FFFFFF;
+    font-size: 32px; /* Adjusted from 40px */
+  }
+  /* .page-header-spacer is removed */
+  .header-title-time {
+    flex-direction: column; /* Stack time and title */
+    align-items: flex-start; /* Align time and title to the left within their div */
+  }
+  .content-scroll-container { /* New scroll container for content */
+    flex: 1; /* Take remaining space */
+    width: 100%;
+  }
+  .page-content {
+    flex-direction: column;
+    width: 100%;
+    align-items: center;
+    padding-bottom: 40px; /* Add padding for scrolling */
+  }
+  .device-code-section, .activation-code-section {
+    flex-direction: column;
+    align-items: center;
+    margin-bottom: 20px; /* Increased by 25% from 20px */
+  }
+  .device-code-section text, .activation-code-section text { color: #AAA; font-size: 28px; margin-bottom: 10px; }
+  .code-box, .input-box {
+    width: 90%; /* Use percentage for responsiveness */
+    height: 60px; /* Increased height */
+    background-color: #222;
+    border-radius: 15px;
+    justify-content: center;
+    align-items: center;
+    padding: -1px 10px; /* Add padding */
+  }
+  .code-box text {
+    color: #FFF;
+    font-size: 20px; /* Slightly smaller font */
+    text-overflow: ellipsis; /* Handle overflow */
+  }
+  .input-box {
+    color: #FFF;
+    font-size: 20px;
+    justify-content: center; /* Center placeholder text */
+  }
+  .input-box text {
+      color: #FFF;
+  }
+  .actions { width: 100%; justify-content: center; margin-top: -1px; }
+  .confirm-button { width: 40px; height: 40px; border-radius: 50px; background-color: #007AFF; justify-content: center; align-items: center; }
+  .confirm-icon { color: #FFF; font-size: 40px; /* Adjusted from 60px */ }
+  .status-text { color: #FF3B30; font-size: 24px; margin-top: 20px; }
+
+  /* Styles for T9 Keyboard */
+  .t9-keyboard {
+    flex-direction: column;
+    align-items: center;
+    margin-top: -1px;
+  }
+  .keyboard-row {
+    flex-direction: row;
+    justify-content: center;
+    margin-bottom: -1px; /* Increased spacing */
+  }
+  .key {
+    width: 80px; /* Increased from 100px */
+    height: 80px; /* Increased from 60px */
+    background-color: #2c2c2e;
+    border-radius: 15px;
+    margin: -20px 8px; /* Increased spacing */
+    justify-content: center;
+    align-items: center;
+  }
+  .key-icon {
+    width: 40px; /* Increased from 40px */
+    height: 40px; /* Increased from 40px */
+  }
+
+  /* Styles for header "完成" button (removed, now at bottom) */
+  .header-button-right {
+    width: 80px; /* Same width as back button */
+    height: 80px;
+    border-radius: 40px; /* Make it circular */
+    background-color: #007AFF; /* Same color as original confirm button */
+    justify-content: center;
+    align-items: center;
+  }
+  .header-button-text {
+    color: #FFFFFF;
+    font-size: 10px; /* Adjusted from 20px */
+  }
+</style>
+
+<script>
+  import router from '@system.router';
+  import device from '@system.device';
+  import storage from '@system.storage';
+  import ApiService from '../common/js/api-service.js';
+  import { CONFIG } from '../common/js/config.js';
+  import T9Keyboard from '../common/T9Keyboard.ux'; // Now using template-level import, but keeping JS import for components object.
+
+  export default {
+    components: {
+      't9-keyboard': T9Keyboard // Register with kebab-case name
+    },
+    data: {
+      time: '00:00',
+      deviceCode: '正在生成...',
+      activationCode: '',
+      statusMessage: ''
+    },
+    onInit() {
+      this.updateTime();
+      setInterval(this.updateTime, 60000);
+      this.generateDeviceCode();
+    },
+    updateTime() {
+      const now = new Date();
+      const hours = now.getHours().toString().padStart(2, '0');
+      const minutes = now.getMinutes().toString().padStart(2, '0');
+      this.time = `${hours}:${minutes}`;
+    },
+    goBack() {
+      router.back();
+    },
+    handleKeyClick(e) {
+      const key = e.detail.value;
+      if (key === '⌫') {
+        this.activationCode = this.activationCode.slice(0, -1);
+      } else if (key === '✓') {
+        this.activate(); // No keyboard to hide, activate directly
+      } else {
+        this.activationCode += key;
+      }
+      console.log('handleKeyClick fired. key:', key);
+      console.log('activationCode after click:', this.activationCode);
+    },
+    generateDeviceCode() {
+      try {
+        device.getSerial({
+          success: (data) => {
+            const serialNumber = data.serial;
+            if (!serialNumber) {
+              this.deviceCode = "设备序列号无效";
+              return;
+            }
+
+            let processedSerial = serialNumber.substring(0, 13);
+            processedSerial = processedSerial.replace(/\//g, ''); // Remove all '/'
+
+            const letterToNumberMap = { 'A': 1, 'B': 2, 'C': 3, 'D': 4, 'E': 5 };
+            let numericSerial = '';
+            for (let i = 0; i < processedSerial.length; i++) {
+              let char = processedSerial[i].toUpperCase();
+              if (char >= 'F' && char <= 'Z') {
+                char = 'E';
+              }
+              if (letterToNumberMap[char]) {
+                numericSerial += letterToNumberMap[char];
+              } else if (!isNaN(parseInt(char, 10))) {
+                numericSerial += char;
+              }
+            }
+
+            if (numericSerial.length < 12) {
+              numericSerial = numericSerial.padEnd(12, '0');
+            } else if (numericSerial.length > 12) {
+              numericSerial = numericSerial.substring(0, 12);
+            }
+            
+            if (numericSerial.length !== 12 || !/^\d{12}$/.test(numericSerial)) {
+                this.deviceCode = "序列号处理结果非12位数字";
+                return;
+            }
+
+            const pairs = [];
+            for (let i = 0; i < 12; i += 2) {
+              pairs.push(numericSerial.substring(i, i + 2));
+            }
+
+            const selectedPairs = [pairs[0], pairs[2], pairs[4]];
+
+            const sumAB = parseInt(selectedPairs[0][0], 10) + parseInt(selectedPairs[0][1], 10);
+            const sumEF = parseInt(selectedPairs[1][0], 10) + parseInt(selectedPairs[1][1], 10);
+            const sumIJ = parseInt(selectedPairs[2][0], 10) + parseInt(selectedPairs[2][1], 10);
+
+            const sumBFJ = parseInt(selectedPairs[0][1], 10) + parseInt(selectedPairs[1][1], 10) + parseInt(selectedPairs[2][1], 10);
+
+            const formattedSumAB = String(sumAB).padStart(2, '0');
+            const formattedSumEF = String(sumEF).padStart(2, '0');
+            const formattedSumIJ = String(sumIJ).padStart(2, '0');
+            const formattedSumBFJ = String(sumBFJ).padStart(2, '0');
+            
+            this.deviceCode = `${formattedSumAB}${formattedSumEF}${formattedSumIJ}${formattedSumBFJ}1`;
+            console.log('generateDeviceCode: Final deviceCode:', this.deviceCode); // Add log here
+          },
+          fail: (data, code) => {
+            this.deviceCode = `获取设备序列号失败: ${code} - ${JSON.stringify(data)}`;
+            console.error('generateDeviceCode: Failed to get serial:', data, code); // Add log here
+          }
+        });
+      } catch (err) {
+        this.deviceCode = `设备码计算错误: ${err.message}`;
+        console.error('generateDeviceCode: Calculation error:', err); // Add log here
+      }
+    },
+    async activate() {
+      if (!this.activationCode) {
+        this.statusMessage = "请输入激活码";
+        return;
+      }
+      if (this.activationCode.length !== 11) {
+        this.statusMessage = "激活码长度不正确，应为11位";
+        return;
+      }
+
+      // Step 1: Code Extraction and Device Code Comparison
+      const ac = this.activationCode; // Alias for activationCode for brevity
+      const _A = ac[0];
+      const _B = ac[1];
+      const _C = ac[2];
+      const _D = ac[3];
+      const _E = ac[4];
+      const _F = ac[5];
+      const _G = ac[6];
+      const _H = ac[7];
+      const _I = ac[8];
+      const _J = ac[9];
+      const _K = ac[10]; // K is now actively used
+
+      const G_val = parseInt(_G, 10);
+      const K_val = parseInt(_K, 10);
+      
+      const HI_parsed = parseInt(`${_H}${_I}`, 10);
+      const HI_modified_num = HI_parsed - G_val - K_val;
+
+      if (HI_modified_num < 0 || HI_modified_num > 99) {
+        this.statusMessage = "激活失败: HI减法结果无效";
+        return;
+      }
+      const HI_modified_str = String(HI_modified_num).padStart(2, '0');
+
+      const AB_val = parseInt(`${_A}${_B}`, 10);
+      const CD_val = parseInt(`${_C}${_D}`, 10);
+      const EF_val = parseInt(`${_E}${_F}`, 10);
+
+      let AB_divided, CD_divided, EF_divided;
+
+      if (G_val === 0) {
+        AB_divided = AB_val;
+        CD_divided = CD_val;
+        EF_divided = EF_val;
+      } else {
+        AB_divided = Math.floor(AB_val / G_val);
+        CD_divided = Math.floor(CD_val / G_val);
+        EF_divided = Math.floor(EF_val / G_val);
+      }
+
+      const AB_formatted = String(AB_divided).padStart(2, '0');
+      const CD_formatted = String(CD_divided).padStart(2, '0');
+      const EF_formatted = String(EF_divided).padStart(2, '0');
+
+      const groupABCDEFHIJ = `${AB_formatted}${CD_formatted}${EF_formatted}${HI_modified_str}${_J}`;
+
+      if (groupABCDEFHIJ !== this.deviceCode) {
+        this.statusMessage = "激活失败: 设备码不匹配";
+        return;
+      }
+      // Compare groupABCDEFHIJ with deviceCode (Step 1, part 4)
+      if (groupABCDEFHIJ !== this.deviceCode) {
+        this.statusMessage = "激活失败: 设备码不匹配";
+        return;
+      }
+
+      // Step 2: Time-based Validation
+      const now = new Date();
+      let currentMinutes = now.getMinutes(); // YZ
+      
+      if (currentMinutes <= 9) {
+        currentMinutes += 60;
+      }
+
+      const GJ_value = parseInt(`${_G}${_J}`, 10);
+
+      const diff = currentMinutes - GJ_value;
+
+      if (diff <= 10 && diff >= 0) { // Assuming diff should also be non-negative for a valid activation window
+        this.statusMessage = "激活成功！";
+        // Assuming a generic userInfo for local activation as there's no backend
+        storage.set({ key: 'is_activated', value: 'true' });
+        storage.set({ key: CONFIG.STORAGE_KEYS.USER_INFO, value: JSON.stringify({ deviceCode: this.deviceCode, activationCode: this.activationCode }) });
+        setTimeout(() => {
+          router.back();
+        }, 1000);
+      } else {
+        this.statusMessage = `激活失败: 时间校验不通过 (差值: ${diff})`;
+      }
+    }
+  }
+</script>
