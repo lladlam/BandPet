@@ -92,8 +92,9 @@
 <script>
   import router from '@system.router';
   import storage from '@system.storage';
+  import prompt from '@system.prompt';
   import ApiService from '../common/js/api-service.js';
-  import { auth } from '../common/js/auth.js';
+  import authGuard from '../common/js/auth-guard.js';
   import { CONFIG } from '../common/js/config.js';
   import QwertyKeyboard from '../common/QwertyKeyboard.ux';
 
@@ -105,20 +106,24 @@
       time: '00:00',
       currentPetName: '...',
       newPetName: '',
-      userId: null,
       statusMessage: '',
       showKeyboard: false
     },
     async onInit() {
       this.updateTime();
-      setInterval(this.updateTime, 60000);
+      setInterval(this.updateTime, 5000);
 
-      const { isActivated, userInfo } = await auth.getActivationState();
-      if (isActivated && userInfo) {
-        this.userId = userInfo.id;
-        this.currentPetName = userInfo.pet_name || '(无名)';
-      } else {
-        this.currentPetName = '(请先激活)';
+      // Attempt to load current name for display purposes only
+      try {
+        const userInfoResult = await storage.get({ key: CONFIG.STORAGE_KEYS.USER_INFO });
+        if (userInfoResult.value) {
+          const userInfo = JSON.parse(userInfoResult.value);
+          this.currentPetName = userInfo.pet_name || '(无名)';
+        } else {
+          this.currentPetName = '(无名)';
+        }
+      } catch (e) {
+        this.currentPetName = '(无名)';
       }
     },
     updateTime() {
@@ -144,33 +149,54 @@
       }
     },
     async savePetName() {
-      const { isActivated, userInfo } = await auth.getActivationState();
-      if (!isActivated) {
-        this.statusMessage = '请先激活';
-        setTimeout(() => router.push({ uri: 'activate' }), 1000);
-        return;
-      }
-
       if (!this.newPetName || this.newPetName.length > 10) {
         this.statusMessage = '名字需在1-10个字符之间';
         return;
       }
-      this.statusMessage = '正在保存...';
+      
+      const guardResult = await authGuard.checkNetworkAccess();
+      if (!guardResult.canAccess) {
+        prompt.showToast({ message: guardResult.message, duration: 3000 });
+        return;
+      }
 
-      const result = await ApiService.setPetName(this.userId, this.newPetName);
+      // Step 1: Check name availability
+      this.statusMessage = '正在检查名称可用性...';
+      const availabilityResult = await ApiService.checkPetNameAvailability(this.newPetName);
 
-      if (result.success) {
+      if (!availabilityResult.success || !availabilityResult.isAvailable) {
+        this.statusMessage = `保存失败: ${availabilityResult.isAvailable === false ? '该名称已被使用，请更换另一个名字' : (availabilityResult.error || '无法检查名称')}`;
+        return;
+      }
+
+      // Step 2: Set the new name
+      this.statusMessage = '名称可用，正在保存...';
+      const { userInfo } = guardResult;
+      const setResult = await ApiService.setPetName(userInfo.id, this.newPetName);
+
+      if (setResult.success) {
+        // Update UI immediately
         this.currentPetName = this.newPetName;
-        this.statusMessage = '宠物名字已更新！';
-        
-        const updatedUserInfo = { ...userInfo, pet_name: this.newPetName };
-        storage.set({
+        this.newPetName = ''; // Clear input
+        this.statusMessage = ''; // Clear status text
+
+        // Update the stored user info with the new name
+        const updatedUserInfo = { ...userInfo, pet_name: this.currentPetName };
+        await storage.set({
           key: CONFIG.STORAGE_KEYS.USER_INFO,
           value: JSON.stringify(updatedUserInfo)
         });
 
+        // Show toast and navigate back
+        prompt.showToast({
+          message: '宠物名字已更新！'
+        });
+        setTimeout(() => {
+          router.back();
+        }, 1500);
+
       } else {
-        this.statusMessage = `保存失败: ${result.error || '未知错误'}`;
+        this.statusMessage = `保存失败: ${setResult.error || '未知错误'}`;
       }
     },
     goBack() {

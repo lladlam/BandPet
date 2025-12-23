@@ -10,7 +10,7 @@
       </div>
     </div>
     <div class="page-content">
-      <list class="leaderboard-list">
+      <list class="leaderboard-list" if="{{ rankings.length > 0 }}">
         <list-item for="{{rankings}}" class="list-item">
           <div class="rank-container">
             <text class="rank-number">{{$idx + 1}}</text>
@@ -19,6 +19,9 @@
           <text class="rank-score">{{$item.score}}</text>
         </list-item>
       </list>
+      <div class="status-container" if="{{ rankings.length === 0 && statusMessage }}">
+        <text class="status-text">{{ statusMessage }}</text>
+      </div>
     </div>
   </div>
 </template>
@@ -105,20 +108,33 @@
     color: #FFFFFF;
     font-size: 30px;
   }
+  .status-container {
+    flex: 1;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+  .status-text {
+    color: #AAAAAA;
+    font-size: 28px;
+    text-align: center;
+  }
 </style>
 
 <script>
   import router from '@system.router';
   import ApiService from '../common/js/api-service.js';
+  import authGuard from '../common/js/auth-guard.js';
 
   export default {
     data: {
       time: '00:00',
-      rankings: []
+      rankings: [],
+      statusMessage: '正在加载...'
     },
     onInit() {
       this.updateTime();
-      setInterval(this.updateTime, 60000);
+      setInterval(this.updateTime, 5000);
       this.fetchRankings();
     },
     updateTime() {
@@ -128,11 +144,22 @@
       this.time = `${hours}:${minutes}`;
     },
     async fetchRankings() {
+      const guardResult = await authGuard.checkNetworkAccess();
+      if (!guardResult.canAccess) {
+        this.statusMessage = guardResult.message;
+        return;
+      }
+
+      // If guard passes, userInfo is available in guardResult.userInfo, though getRankings doesn't need it.
       const result = await ApiService.getRankings();
-      if (result.success) {
+      if (result.success && result.rankings.length > 0) {
         this.rankings = result.rankings;
+        this.statusMessage = ''; // Clear status on success
+      } else if (result.success && result.rankings.length === 0) {
+        this.statusMessage = '排行榜上还没有人，快去点击吧！';
       } else {
         console.error("Failed to fetch rankings:", result.error);
+        this.statusMessage = '无法加载排行榜，请稍后重试。';
       }
     },
     goBack() {

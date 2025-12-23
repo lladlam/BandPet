@@ -4,7 +4,6 @@ export const CONFIG = {
   SUPABASE: {
     URL: 'https://jqubyqnhgyxazpnpjyqf.supabase.co',
     KEY: 'sb_publishable__UMYGv1VDo-ZrOvuUgZLFg_WKqyc7M-', // 请替换为你的Supabase匿名密钥
-    API_URL: 'https://jqubyqnhgyxazpnpjyqf.supabase.co/functions/v1/bright-responder'
   },
   
   // 应用配置
@@ -18,6 +17,7 @@ export const CONFIG = {
   
   // 存储键名
   STORAGE_KEYS: {
+    IS_LOCALLY_ACTIVATED: 'is_locally_activated',
     DEVICE_ID: 'device_id',
     USER_INFO: 'user_info',
     PENDING_CLICKS: 'pending_clicks',

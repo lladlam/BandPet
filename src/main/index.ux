@@ -127,57 +127,57 @@
 <script>
   import router from '@system.router';
   import storage from '@system.storage';
+  import prompt from '@system.prompt';
   import ApiService from '../common/js/api-service.js';
   import { CONFIG } from '../common/js/config.js';
-  import { auth } from '../common/js/auth.js';
+  import authGuard from '../common/js/auth-guard.js';
 
   export default {
     data: {
       time: '00:00',
-      petName: '(宠物名称)',
+      petName: '(无名)',
       clickCount: 0,
       pendingClicks: 0,
-      userId: null,
-      isActivated: false,
-      petImage: '/common/Ra0.png', // Add this line
+      petImage: '/common/Ra0.png',
       chests: [
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' },
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' }
       ]
     },
-    async onInit() {
+    onInit() {
       this.updateTime();
-      this.loadClicks();
-      this.loadChestStates();
+      this.loadInitialState();
       
-      const { isActivated, userInfo } = await auth.getActivationState();
-      this.isActivated = isActivated;
-      
-      if (isActivated && userInfo) {
-        this.userId = userInfo.id;
-        this.petName = userInfo.pet_name || '(无名)';
-        this.clickCount = userInfo.click_count || this.clickCount;
-        
-        setInterval(this.syncClicks.bind(this), CONFIG.APP.SYNC_INTERVAL);
-        this.syncClicks();
-      }
-
-      setInterval(this.updateTime, 1000 * 60);
+      // Set up intervals unconditionally. The guard inside syncClicks will handle logic.
+      setInterval(this.syncClicks.bind(this), CONFIG.APP.SYNC_INTERVAL);
+      setInterval(this.updateTime, 5000);
       setInterval(this.updateChestTimers.bind(this), 1000);
     },
-    loadClicks() {
-      storage.get({
-        key: CONFIG.STORAGE_KEYS.PENDING_CLICKS,
-        success: (data) => { this.pendingClicks = parseInt(data) || 0; }
-      });
-      storage.get({
-        key: CONFIG.STORAGE_KEYS.TOTAL_CLICKS,
-        success: (data) => {
-          if (!this.isActivated) {
-             this.clickCount = parseInt(data) || 0;
-          }
-        }
-      });
+    async loadInitialState() {
+        // Load non-user-specific data
+        storage.get({
+            key: CONFIG.STORAGE_KEYS.PENDING_CLICKS,
+            success: (data) => { this.pendingClicks = parseInt(data) || 0; }
+        });
+        storage.get({
+            key: CONFIG.STORAGE_KEYS.TOTAL_CLICKS,
+            success: (data) => { this.clickCount = parseInt(data) || 0; }
+        });
+        
+        // Also try to load user-specific data if available, but don't gate anything
+        try {
+            const userInfoResult = await storage.get({ key: CONFIG.STORAGE_KEYS.USER_INFO });
+            if (userInfoResult.value) {
+                const userInfo = JSON.parse(userInfoResult.value);
+                if (userInfo && userInfo.id) {
+                    this.petName = userInfo.pet_name || '(无名)';
+                    // Potentially load server-synced clickCount here if it exists
+                    // this.clickCount = userInfo.click_count || this.clickCount;
+                }
+            }
+        } catch(e) { console.error("Error loading user info on init:", e)}
+
+        this.loadChestStates();
     },
     loadChestStates() {
       storage.get({
@@ -261,13 +261,27 @@
       }
     },
     async syncClicks() {
-      if (!this.isActivated || !this.userId || this.pendingClicks === 0) {
+      if (this.pendingClicks === 0) {
+        return; // No need to check auth if there's nothing to sync
+      }
+
+      const guardResult = await authGuard.checkNetworkAccess();
+      if (!guardResult.canAccess) {
+        prompt.showToast({
+          message: guardResult.message,
+          duration: 3000
+        });
         return;
       }
-      const result = await ApiService.syncClicks(this.userId, this.pendingClicks);
+      
+      const userId = guardResult.userInfo.id;
+      const result = await ApiService.syncClicks(userId, this.pendingClicks);
       if (result.success) {
         this.pendingClicks = 0;
         storage.set({ key: CONFIG.STORAGE_KEYS.PENDING_CLICKS, value: '0' });
+        prompt.showToast({ message: '点击次数已同步' });
+      } else {
+        prompt.showToast({ message: '同步失败，请稍后重试' });
       }
     },
     openMore() {

@@ -12,18 +12,23 @@
     <div class="page-content">
       <div class="content">
         <text class="app-name">BANDPET</text>
-        <text class="app-version">版本 1.0</text>
+        <text class="app-version">版本 0.3.3 Alpha</text>
         <div class="separator"></div>
         <text class="dev-title">参与开发的人员</text>
         <div class="dev-list">
-          <text class="dev-name">@lladlam</text>
-          <text class="dev-name">@Eric齐齐</text>
-          <text class="dev-name">@御与魚余鱼</text>
-          <text class="dev-name">@无源流沙</text>
+          <text class="dev-name">@lladlam(代码)</text>
+          <text class="dev-name">@Eric齐齐(UI设计)</text>
+          <text class="dev-name">@御与魚余鱼(美术)</text>
+          <text class="dev-name">@无源流沙(提供UI思路)</text>
+        <text class="dev-title">我的处女作，只为了你。</text>
+        <div class="dev-list">
+          <text class="dev-name">0.3.3 Alpha: 更改账户登录</text>
+          <text class="dev-name">由于Bug砸坏了一个键盘</text>
         </div>
       </div>
     </div>
   </div>
+</div>
 </template>
 
 <style>
@@ -87,7 +92,7 @@
     },
     onInit() {
       this.updateTime();
-      setInterval(this.updateTime, 60000);
+      setInterval(this.updateTime, 5000);
     },
     updateTime() {
       const now = new Date();

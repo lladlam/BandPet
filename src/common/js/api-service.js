@@ -1,6 +1,9 @@
 // api-service.js
-import fetch from '@system.fetch'
-import { CONFIG } from './config.js'
+import fetch from '@system.fetch';
+import router from '@system.router';
+import storage from '@system.storage';
+import prompt from '@system.prompt';
+import { CONFIG } from './config.js';
 
 class ApiService {
   constructor() {
@@ -30,11 +33,15 @@ class ApiService {
       fetch.fetch({
         ...options,
         success: (response) => {
+          const responseData = response.data || {};
+
+          
+
           if (response.code >= 200 && response.code < 300) {
-            resolve(response.data)
+            resolve(responseData)
           } else {
             console.error(`HTTP Error: ${response.code}`, response);
-            reject(new Error(`HTTP ${response.code}: ${JSON.stringify(response.data)}`))
+            reject(new Error(`HTTP ${response.code}: ${JSON.stringify(responseData)}`))
           }
         },
         fail: (error, code) => {
@@ -77,22 +84,22 @@ class ApiService {
       return { success: true }
     } catch (error) {
       console.error('上报点击次数失败:', error)
-      return { success: false, error: error.message }
+      return { success: false, error: error.message };
     }
   }
-  
-  // 激活
-  async activateDevice(deviceId, activationCode) {
+
+  // 检查宠物名是否可用
+  async checkPetNameAvailability(petName) {
     try {
       const result = await this.request('bright-responder', 'POST', {
-        action: 'activate',
-        device_id: deviceId,
-        activation_code: activationCode
+        action: 'check_pet_name',
+        pet_name: petName
       });
-      return result;
+      // 假设服务器返回 { isAvailable: true/false }
+      return { success: true, ...result };
     } catch (error) {
-      console.error('激活失败:', error);
-      return { success: false, error: error.message };
+      console.error('检查宠物名可用性时发生网络错误:', error);
+      return { success: false, error: error.message, isAvailable: false };
     }
   }
 
@@ -107,6 +114,62 @@ class ApiService {
       return result;
     } catch (error) {
       console.error('修改宠物名失败:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 预激活检查
+  async checkDeviceRegistration(deviceId) {
+    try {
+      const result = await this.request('bright-responder', 'POST', {
+        action: 'check_registration',
+        device_id: deviceId
+      });
+      console.log('预激活检查成功:', result);
+      return { success: true, data: result };
+    } catch (error) {
+      console.error('预激活检查时发生网络错误:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 注册设备并获取用户ID
+  async registerAndGetUserId(deviceId) {
+    try {
+      const result = await this.request('bright-responder', 'POST', {
+        action: 'register_device_and_get_id',
+        device_id: deviceId
+      });
+      // 假设服务器成功时返回 { success: true, userInfo: { id: '...', ... } }
+      if (result && result.success) {
+        console.log('注册设备并获取用户ID成功:', result.userInfo);
+        return { success: true, userInfo: result.userInfo };
+      } else {
+        console.error('获取用户ID失败:', result ? result.error : '未知错误');
+        return { success: false, error: (result ? result.error : '服务器未返回成功状态') };
+      }
+    } catch (error) {
+      console.error('注册或获取用户ID时发生网络错误:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // 验证用户ID并恢复数据
+  async verifyUserIdAndRestore(deviceId, userId) {
+    try {
+      const result = await this.request('bright-responder', 'POST', {
+        action: 'verify_user_id_and_restore',
+        device_id: deviceId,
+        user_id: userId
+      });
+      // 假设服务器成功时返回 { success: true, userInfo: { ... } }
+      if (result && result.success) {
+        return { success: true, userInfo: result.userInfo };
+      } else {
+        return { success: false, error: (result ? result.error : '验证失败') };
+      }
+    } catch (error) {
+      console.error('验证用户ID时发生网络错误:', error);
       return { success: false, error: error.message };
     }
   }

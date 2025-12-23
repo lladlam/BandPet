@@ -26,6 +26,9 @@
     },
     {
       "name": "system.vibrator"
+    },
+    {
+      "name": "system.prompt"
     }
   ],
   "config": {

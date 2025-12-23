@@ -112,7 +112,7 @@
     },
     onInit() {
       this.updateTime();
-      setInterval(this.updateTime, 60000);
+      setInterval(this.updateTime, 5000);
     },
     updateTime() {
       const now = new Date();
