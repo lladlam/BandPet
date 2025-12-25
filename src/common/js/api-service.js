@@ -7,35 +7,31 @@ import { CONFIG } from './config.js';
 
 class ApiService {
   constructor() {
+    // 中转服务器地址 - 从 config.js 读取
+    this.baseUrl = CONFIG.SERVER.BASE_URL;
     this.baseHeaders = {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + CONFIG.SUPABASE.KEY,
-      'apikey': CONFIG.SUPABASE.KEY
     }
   }
 
-  // 通用请求方法
-  async request(endpoint, method = 'POST', data = null) {
-    const url = `${CONFIG.SUPABASE.URL}/functions/v1/${endpoint}`
+  // 通用请求方法 - 通过中转服务器转发
+  async request(action, data = {}) {
+    const url = `${this.baseUrl}/api`;
     
     const options = {
       url,
-      method,
+      method: 'POST',
       header: this.baseHeaders,
       responseType: 'json'
-    }
+    };
 
-    if (data) {
-      options.data = JSON.stringify(data)
-    }
+    options.data = JSON.stringify({ action, ...data });
 
     return new Promise((resolve, reject) => {
       fetch.fetch({
         ...options,
         success: (response) => {
           const responseData = response.data || {};
-
-          
 
           if (response.code >= 200 && response.code < 300) {
             resolve(responseData)
@@ -55,8 +51,7 @@ class ApiService {
   // 获取排行榜
   async getRankings(limit = 10) {
     try {
-      const result = await this.request('bright-responder', 'POST', {
-        action: 'get_rankings',
+      const result = await this.request('get_rankings', {
         limit: limit
       })
       return {
@@ -76,8 +71,7 @@ class ApiService {
   // 上报点击次数
   async syncClicks(userId, clickCount) {
     try {
-      await this.request('bright-responder', 'POST', {
-        action: 'sync_clicks',
+      await this.request('sync_clicks', {
         user_id: userId,
         click_count: clickCount
       })
@@ -91,11 +85,9 @@ class ApiService {
   // 检查宠物名是否可用
   async checkPetNameAvailability(petName) {
     try {
-      const result = await this.request('bright-responder', 'POST', {
-        action: 'check_pet_name',
+      const result = await this.request('check_pet_name', {
         pet_name: petName
       });
-      // 假设服务器返回 { isAvailable: true/false }
       return { success: true, ...result };
     } catch (error) {
       console.error('检查宠物名可用性时发生网络错误:', error);
@@ -106,8 +98,7 @@ class ApiService {
   // 修改宠物名
   async setPetName(userId, newName) {
     try {
-      const result = await this.request('bright-responder', 'POST', {
-        action: 'set_pet_name',
+      const result = await this.request('set_pet_name', {
         user_id: userId,
         new_name: newName
       });
@@ -121,8 +112,7 @@ class ApiService {
   // 预激活检查
   async checkDeviceRegistration(deviceId) {
     try {
-      const result = await this.request('bright-responder', 'POST', {
-        action: 'check_registration',
+      const result = await this.request('check_registration', {
         device_id: deviceId
       });
       console.log('预激活检查成功:', result);
@@ -136,11 +126,9 @@ class ApiService {
   // 注册设备并获取用户ID
   async registerAndGetUserId(deviceId) {
     try {
-      const result = await this.request('bright-responder', 'POST', {
-        action: 'register_device_and_get_id',
+      const result = await this.request('register_device_and_get_id', {
         device_id: deviceId
       });
-      // 假设服务器成功时返回 { success: true, userInfo: { id: '...', ... } }
       if (result && result.success) {
         console.log('注册设备并获取用户ID成功:', result.userInfo);
         return { success: true, userInfo: result.userInfo };
@@ -157,12 +145,10 @@ class ApiService {
   // 验证用户ID并恢复数据
   async verifyUserIdAndRestore(deviceId, userId) {
     try {
-      const result = await this.request('bright-responder', 'POST', {
-        action: 'verify_user_id_and_restore',
+      const result = await this.request('verify_user_id_and_restore', {
         device_id: deviceId,
         user_id: userId
       });
-      // 假设服务器成功时返回 { success: true, userInfo: { ... } }
       if (result && result.success) {
         return { success: true, userInfo: result.userInfo };
       } else {

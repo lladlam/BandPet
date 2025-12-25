@@ -1,6 +1,6 @@
 {
   "name": "BandPet",
-  "version": "1.0.0",
+  "version": "0.3.4 Alpha",
   "description": "A virtual pet game for Xiaomi Band 9 Pro.",
   "engines": {
     "node": ">=8.10"

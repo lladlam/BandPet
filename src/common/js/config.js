@@ -1,18 +1,20 @@
 // config.js
 export const CONFIG = {
-  // Supabase配置
-  SUPABASE: {
-    URL: 'https://jqubyqnhgyxazpnpjyqf.supabase.co',
-    KEY: 'sb_publishable__UMYGv1VDo-ZrOvuUgZLFg_WKqyc7M-', // 请替换为你的Supabase匿名密钥
+  // 中转服务器配置
+  SERVER: {
+    BASE_URL: 'http://103.205.253.87:22207'
   },
+  
+  // 注意：URL 前缀在 api-service.js 中硬编码了
+  // 这里不再需要配置
   
   // 应用配置
   APP: {
     NAME: 'BandPet',
-    VERSION: '1.0.0',
-    MAX_CLICKS_PER_BATCH: 50, // 批量上传最大点击数
-    SYNC_INTERVAL: 300000, // 5分钟同步一次
-    RANK_LIMIT: 10 // 排行榜显示数量
+    VERSION: '0.3.4 Alpha',
+    MAX_CLICKS_PER_BATCH: 50,
+    SYNC_INTERVAL: 300000,
+    RANK_LIMIT: 10
   },
   
   // 存储键名

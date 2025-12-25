@@ -12,7 +12,7 @@
     <div class="page-content">
       <div class="content">
         <text class="app-name">BANDPET</text>
-        <text class="app-version">版本 0.3.3 Alpha</text>
+        <text class="app-version">版本 0.3.4 Alpha</text>
         <div class="separator"></div>
         <text class="dev-title">参与开发的人员</text>
         <div class="dev-list">
@@ -22,8 +22,7 @@
           <text class="dev-name">@无源流沙(提供UI思路)</text>
         <text class="dev-title">我的处女作，只为了你。</text>
         <div class="dev-list">
-          <text class="dev-name">0.3.3 Alpha: 更改账户登录</text>
-          <text class="dev-name">由于Bug砸坏了一个键盘</text>
+          <text class="dev-name">0.3.4Alpha:增加中转</text>
         </div>
       </div>
     </div>
