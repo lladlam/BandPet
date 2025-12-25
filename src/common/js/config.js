@@ -11,7 +11,7 @@ export const CONFIG = {
   // 应用配置
   APP: {
     NAME: 'BandPet',
-    VERSION: '0.3.4 Alpha',
+    VERSION: '0.3.5 Alpha',
     MAX_CLICKS_PER_BATCH: 50,
     SYNC_INTERVAL: 300000,
     RANK_LIMIT: 10
@@ -19,7 +19,6 @@ export const CONFIG = {
   
   // 存储键名
   STORAGE_KEYS: {
-    IS_LOCALLY_ACTIVATED: 'is_locally_activated',
     DEVICE_ID: 'device_id',
     USER_INFO: 'user_info',
     PENDING_CLICKS: 'pending_clicks',
