@@ -132,6 +132,29 @@
   import { CONFIG } from '../common/js/config.js';
   import authGuard from '../common/js/auth-guard.js';
 
+  // --- Start of Promisified Helpers ---
+  const _promisifiedStorageGet = (key) => {
+    return new Promise((resolve) => {
+      storage.get({
+        key: key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      });
+    });
+  };
+
+  const _promisifiedStorageSet = (key, value) => {
+    return new Promise((resolve, reject) => {
+      storage.set({
+        key: key,
+        value: value,
+        success: resolve,
+        fail: (err, code) => reject(new Error(`Storage.set failed for key '${key}' with code ${code}: ${err}`))
+      });
+    });
+  };
+  // --- End of Promisified Helpers ---
+
   export default {
     data: {
       time: '00:00',
@@ -142,73 +165,80 @@
       chests: [
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' },
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' }
-      ]
+      ],
+      // Add a simple flag to prevent multiple initializations
+      isInitialized: false 
     },
-    onInit() {
-      this.updateTime();
-      this.loadInitialState();
+
+    async onInit() {
+      if (this.isInitialized) return;
+      this.isInitialized = true;
+
+      console.log("Main page onInit: Running auth check.");
+      const guardResult = await authGuard.checkNetworkAccess();
       
-      // Set up intervals unconditionally. The guard inside syncClicks will handle logic.
+      if (!guardResult || !guardResult.canAccess) {
+        console.log("AuthGuard failed on main page, halting init.");
+        return;
+      }
+      
+      console.log("AuthGuard passed, initializing main page.");
+      await this.loadInitialState(guardResult.userInfo);
+      
+      this.updateTime();
       setInterval(this.syncClicks.bind(this), CONFIG.APP.SYNC_INTERVAL);
       setInterval(this.updateTime, 5000);
       setInterval(this.updateChestTimers.bind(this), 1000);
     },
-    async loadInitialState() {
-        // Load non-user-specific data
-        storage.get({
-            key: CONFIG.STORAGE_KEYS.PENDING_CLICKS,
-            success: (data) => { this.pendingClicks = parseInt(data) || 0; }
-        });
-        storage.get({
-            key: CONFIG.STORAGE_KEYS.TOTAL_CLICKS,
-            success: (data) => { this.clickCount = parseInt(data) || 0; }
-        });
-        
-        // Also try to load user-specific data if available, but don't gate anything
-        try {
-            const userInfoResult = await storage.get({ key: CONFIG.STORAGE_KEYS.USER_INFO });
-            if (userInfoResult.value) {
-                const userInfo = JSON.parse(userInfoResult.value);
-                if (userInfo && userInfo.id) {
-                    this.petName = userInfo.pet_name || '(无名)';
-                    // Potentially load server-synced clickCount here if it exists
-                    // this.clickCount = userInfo.click_count || this.clickCount;
-                }
-            }
-        } catch(e) { console.error("Error loading user info on init:", e)}
 
-        this.loadChestStates();
-    },
-    loadChestStates() {
-      storage.get({
-        key: 'chestStates',
-        success: (data) => {
-          if (data) {
-            const loadedChests = JSON.parse(data);
-            this.chests = loadedChests.map(chest => {
-              if (chest.refreshTimestamp > 0 && chest.claimed) {
-                const remainingTime = Math.max(0, chest.refreshTimestamp - Date.now());
-                if (remainingTime <= 0) {
-                  chest.claimed = false;
-                  chest.refreshTimestamp = 0;
-                }
-              }
-              return chest;
-            });
-          }
+    async loadInitialState(userInfo) {
+        const pendingClicksData = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.PENDING_CLICKS);
+        this.pendingClicks = parseInt(pendingClicksData) || 0;
+        
+        if (userInfo && userInfo.id) {
+            this.petName = userInfo.pet_name || '(无名)';
+            this.clickCount = userInfo.total_clicks || 0;
+            
+            // Await storage updates to ensure consistency
+            await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, this.clickCount.toString());
+            await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(userInfo));
+        } else {
+            console.error("Main page loaded without valid user info!");
         }
-      });
+
+        await this.loadChestStates();
     },
-    saveChestStates() {
-      storage.set({ key: 'chestStates', value: JSON.stringify(this.chests) });
+
+    async loadChestStates() {
+      const chestData = await _promisifiedStorageGet('chestStates');
+      if (chestData) {
+        const loadedChests = JSON.parse(chestData);
+        this.chests = loadedChests.map(chest => {
+          if (chest.refreshTimestamp > 0 && chest.claimed) {
+            const remainingTime = Math.max(0, chest.refreshTimestamp - Date.now());
+            if (remainingTime <= 0) {
+              chest.claimed = false;
+              chest.refreshTimestamp = 0;
+            }
+          }
+          return chest;
+        });
+      }
     },
+
+    async saveChestStates() {
+      await _promisifiedStorageSet('chestStates', JSON.stringify(this.chests));
+    },
+
     updateTime() {
       const now = new Date();
       const hours = now.getHours().toString().padStart(2, '0');
       const minutes = now.getMinutes().toString().padStart(2, '0');
       this.time = `${hours}:${minutes}`;
     },
+
     updateChestTimers() {
+      let needsSave = false;
       this.chests.forEach((chest, index) => {
         if (chest.claimed && chest.refreshTimestamp > 0) {
           const remainingTime = Math.max(0, chest.refreshTimestamp - Date.now());
@@ -216,32 +246,37 @@
           if (remainingTime <= 0) {
             this.chests[index].claimed = false;
             this.chests[index].refreshTimestamp = 0;
-            this.saveChestStates();
+            needsSave = true;
           }
         }
       });
+      if (needsSave) {
+        this.saveChestStates();
+      }
     },
+
     formatTime(seconds) {
       const minutes = Math.floor(seconds / 60);
       const remainingSeconds = Math.floor(seconds % 60);
       return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     },
-    incrementClick() {
+
+    async incrementClick() {
       this.clickCount++;
       this.pendingClicks++;
-      storage.set({ key: CONFIG.STORAGE_KEYS.PENDING_CLICKS, value: this.pendingClicks.toString() });
-      storage.set({ key: CONFIG.STORAGE_KEYS.TOTAL_CLICKS, value: this.clickCount.toString() });
 
-      // Randomly switch pet image to Ra1 or Ra2
+      try {
+        await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, this.pendingClicks.toString());
+        await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, this.clickCount.toString());
+      } catch (e) { console.error("Failed to save clicks:", e); }
+
       const randomImage = Math.random() < 0.5 ? '/common/Ra1.png' : '/common/Ra2.png';
       this.petImage = randomImage;
 
-      // Reset to Ra0 after a short delay
-      setTimeout(() => {
-        this.petImage = '/common/Ra0.png';
-      }, 200);
+      setTimeout(() => { this.petImage = '/common/Ra0.png'; }, 200);
     },
-    claimChest(index) {
+
+    async claimChest(index) {
       const chest = this.chests[index];
       if (chest.claimed) {
         console.log('Chest is on cooldown.');
@@ -251,43 +286,46 @@
         this.clickCount -= 1000;
         const reward = Math.floor(Math.random() * 500) + 100;
         this.clickCount += reward;
-        storage.set({ key: CONFIG.STORAGE_KEYS.TOTAL_CLICKS, value: this.clickCount.toString() });
+        
         console.log(`Chest ${index} claimed! Rewarded ${reward} clicks.`);
         this.chests[index].claimed = true;
         this.chests[index].refreshTimestamp = Date.now() + (30 * 60 * 1000);
-        this.saveChestStates();
+        
+        try {
+          await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, this.clickCount.toString());
+          await this.saveChestStates();
+        } catch(e) { console.error("Failed to save chest state:", e); }
+
       } else {
         console.log('Not enough clicks to open chest.');
       }
     },
+
     async syncClicks() {
-      if (this.pendingClicks === 0) {
-        return; // No need to check auth if there's nothing to sync
-      }
+      if (this.pendingClicks === 0) return;
 
       const guardResult = await authGuard.checkNetworkAccess();
-      if (!guardResult.canAccess) {
-        prompt.showToast({
-          message: guardResult.message,
-          duration: 3000
-        });
+      if (!guardResult || !guardResult.canAccess) {
+        prompt.showToast({ message: guardResult.message || '需要激活才能同步', duration: 3000 });
         return;
       }
       
       const userId = guardResult.userInfo.id;
-      const result = await ApiService.syncClicks(userId, this.pendingClicks);
+      const clicksToSync = this.pendingClicks;
+      const result = await ApiService.syncClicks(userId, clicksToSync);
+
       if (result.success) {
-        this.pendingClicks = 0;
-        storage.set({ key: CONFIG.STORAGE_KEYS.PENDING_CLICKS, value: '0' });
+        this.pendingClicks -= clicksToSync;
+        if (this.pendingClicks < 0) this.pendingClicks = 0;
+        await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, this.pendingClicks.toString());
         prompt.showToast({ message: '点击次数已同步' });
       } else {
         prompt.showToast({ message: '同步失败，请稍后重试' });
       }
     },
+
     openMore() {
-      router.push({
-        uri: 'more'
-      });
+      router.push({ uri: 'more' });
     }
   }
 </script>

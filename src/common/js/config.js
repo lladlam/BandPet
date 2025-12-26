@@ -20,6 +20,7 @@ export const CONFIG = {
   // 存储键名
   STORAGE_KEYS: {
     DEVICE_ID: 'device_id',
+    IS_LOCALLY_ACTIVATED: 'is_locally_activated',
     USER_INFO: 'user_info',
     PENDING_CLICKS: 'pending_clicks',
     LAST_SYNC_TIME: 'last_sync_time',

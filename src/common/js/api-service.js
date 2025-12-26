@@ -116,47 +116,41 @@ class ApiService {
         device_id: deviceId
       });
       console.log('预激活检查成功:', result);
-      return { success: true, data: result };
+      // 直接返回服务器的原始响应，UI层期望的是扁平结构
+      return result;
     } catch (error) {
       console.error('预激活检查时发生网络错误:', error);
-      return { success: false, error: error.message };
+      // 返回一个兼容的错误对象，避免UI层崩溃
+      return { is_registered: false, can_auto_activate: false, error: error.message };
     }
   }
 
   // 注册设备并获取用户ID
   async registerAndGetUserId(deviceId) {
     try {
-      const result = await this.request('register_device_and_get_id', {
+      // Pass the server response directly to the UI layer
+      return await this.request('register_device_and_get_id', {
         device_id: deviceId
       });
-      if (result && result.success) {
-        console.log('注册设备并获取用户ID成功:', result.userInfo);
-        return { success: true, userInfo: result.userInfo };
-      } else {
-        console.error('获取用户ID失败:', result ? result.error : '未知错误');
-        return { success: false, error: (result ? result.error : '服务器未返回成功状态') };
-      }
     } catch (error) {
       console.error('注册或获取用户ID时发生网络错误:', error);
-      return { success: false, error: error.message };
+      // Return a compatible error object
+      return { success: false, message: error.message };
     }
   }
 
   // 验证用户ID并恢复数据
   async verifyUserIdAndRestore(deviceId, userId) {
     try {
-      const result = await this.request('verify_user_id_and_restore', {
+      // Pass the server response directly to the UI layer
+      return await this.request('verify_user_id_and_restore', {
         device_id: deviceId,
         user_id: userId
       });
-      if (result && result.success) {
-        return { success: true, userInfo: result.userInfo };
-      } else {
-        return { success: false, error: (result ? result.error : '验证失败') };
-      }
     } catch (error) {
       console.error('验证用户ID时发生网络错误:', error);
-      return { success: false, error: error.message };
+      // Return a compatible error object
+      return { success: false, message: error.message };
     }
   }
 }

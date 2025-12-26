@@ -1,24 +1,48 @@
 <script>
-export default {
-  onCreate() {
-    console.log('[lifecycle] [app] onCreate');
-  },
+  import router from '@system.router';
+  import authGuard from './common/js/auth-guard.js';
 
-  onShow() {
-    console.log('[lifecycle] [app] onShow');
-  },
+  export default {
+    async onCreate() {
+      console.log('[lifecycle] [app] onCreate - Running activation check.');
+      
+      try {
+        const result = await authGuard.checkNetworkAccess();
+        
+        if (result && result.canAccess) {
+          // If auth guard passes, it means we are activated and have user info.
+          // We need to manually route to the main page.
+          console.log('AuthGuard check passed. Navigating to main page.');
+          router.replace({
+            uri: 'main'
+          });
+        } else {
+          // If auth guard fails (returns canAccess: false), it has already
+          // handled the redirection to the 'activate' page internally.
+          console.log('AuthGuard check failed. Redirection to activate page is handled by the guard.');
+        }
+      } catch (e) {
+        console.error('A critical error occurred during app startup in app.ux:', e);
+        // As a last resort, navigate to the activation page.
+        router.replace({ uri: 'activate' });
+      }
+    },
 
-  onHide() {
-    console.log('[lifecycle] [app] onHide');
-  },
+    onShow() {
+      console.log('[lifecycle] [app] onShow');
+    },
 
-  onDestroy() {
-    console.log('[lifecycle] [app] onDestroy');
-  },
+    onHide() {
+      console.log('[lifecycle] [app] onHide');
+    },
 
-  onError(err) {
-    console.log(`[lifecycle] [app] onError errmsg: ${err.message}`)
-    console.log(`[lifecycle] [app] onError error stack: ${err.stack}`)
+    onDestroy() {
+      console.log('[lifecycle] [app] onDestroy');
+    },
+
+    onError(err) {
+      console.log(`[lifecycle] [app] onError errmsg: ${err.message}`);
+      console.log(`[lifecycle] [app] onError error stack: ${err.stack}`);
+    }
   }
-}
 </script>

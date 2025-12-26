@@ -231,51 +231,65 @@
 
     // New centralized success handler
     async handleActivationSuccess(userInfo) {
-      await storage.set({ 
-        key: CONFIG.STORAGE_KEYS.IS_LOCALLY_ACTIVATED, 
-        value: 'true' 
-      });
-      
-      // The rawDeviceId is already saved in storage from processDeviceIdentifier
-      
-      const userInfoToSave = {
-        id: userInfo.id || userInfo.user_number,
-        user_number: userInfo.user_number,
-        pet_name: userInfo.pet_name,
-        total_clicks: userInfo.total_clicks || 0
-      };
-      await storage.set({ 
-        key: CONFIG.STORAGE_KEYS.USER_INFO, 
-        value: JSON.stringify(userInfoToSave) 
-      });
-      
-      setTimeout(() => {
-        router.replace({ uri: 'main' });
-      }, 1000);
+      this.statusMessage = '正在保存激活信息...';
+      try {
+        // Promisify the first storage.set call
+        await new Promise((resolve, reject) => {
+          storage.set({
+            key: CONFIG.STORAGE_KEYS.IS_LOCALLY_ACTIVATED,
+            value: 'true',
+            success: resolve,
+            fail: (err, code) => reject(`Failed to save activation status: ${err} (${code})`)
+          });
+        });
+
+        // The rawDeviceId is already saved in storage from processDeviceIdentifier
+        const userInfoToSave = {
+          id: userInfo.id || userInfo.user_number,
+          user_number: userInfo.user_number,
+          pet_name: userInfo.pet_name,
+          total_clicks: userInfo.total_clicks || 0
+        };
+
+        // Promisify the second storage.set call
+        await new Promise((resolve, reject) => {
+          storage.set({
+            key: CONFIG.STORAGE_KEYS.USER_INFO,
+            value: JSON.stringify(userInfoToSave),
+            success: resolve,
+            fail: (err, code) => reject(`Failed to save user info: ${err} (${code})`)
+          });
+        });
+
+        this.statusMessage = '激活成功！正在跳转...';
+        setTimeout(() => {
+          router.replace({ uri: 'main' });
+        }, 1000);
+
+      } catch (e) {
+        console.error('Failed to save activation data: ' + e);
+        this.statusMessage = '激活失败：无法写入本地数据。';
+      }
     },
 
     async attemptAutoActivation() {
       if (!this.rawDeviceId) return;
       this.statusMessage = '正在检查设备注册信息...';
-      // Use rawDeviceId for server communication
+      
       const result = await ApiService.checkDeviceRegistration(this.rawDeviceId);
 
-      if (result.success && result.data && result.data.is_registered) {
-        const { userInfo, auto_activation_count, reason } = result.data;
-
-        if (reason === 'logged_in_on_newer_device') {
-          this.statusMessage = '此设备之前绑定的用户已在其他设备上登录，请重新激活。';
-          return;
-        }
-
-        if (result.data.can_auto_activate) {
-          this.statusMessage = `自动激活成功！正在恢复数据... (${(auto_activation_count || 0) + 1}/5)`;
-          await this.handleActivationSuccess(userInfo);
+      if (result && result.is_registered) {
+        if (result.can_auto_activate) {
+          this.statusMessage = `自动激活成功！正在恢复数据... (${(result.auto_activation_count || 0) + 1}/5)`;
+          // The userInfo is at the top level of the result
+          await this.handleActivationSuccess(result.userInfo);
         } else {
-          this.statusMessage = '自动激活次数已达上限，请手动激活。';
+          // auto_activation_exceeded or other reasons
+          this.statusMessage = result.message || '自动激活次数已达上限，请手动激活。';
         }
       } else {
-        this.statusMessage = ''; // Not registered or API failed
+        // Not registered or API failed (result is null/undefined)
+        this.statusMessage = ''; // Clear status message as it's not an error, just not registered
       }
     },
 
@@ -312,14 +326,21 @@
     async verifyUserIdAndProceed() {
       if (!this.userIdInput || !this.rawDeviceId) return;
       this.statusMessage = '正在验证用户ID...';
-      // Use rawDeviceId for server communication
-      const result = await ApiService.verifyUserIdAndRestore(this.rawDeviceId, this.userIdInput);
+      
+      try {
+        const result = await ApiService.verifyUserIdAndRestore(this.rawDeviceId, this.userIdInput);
 
-      if (result.success && result.userInfo) {
-        this.statusMessage = '验证成功，正在恢复数据...';
-        await this.handleActivationSuccess(result.userInfo);
-      } else {
-        this.statusMessage = result.error || '用户ID验证失败，请重试。';
+        // According to API spec #7, a successful call returns success:true and a userInfo object.
+        if (result && result.success && result.userInfo) {
+          this.statusMessage = '验证成功，正在恢复数据...';
+          await this.handleActivationSuccess(result.userInfo);
+        } else {
+          // Handle failure from spec #8, #16 etc.
+          this.statusMessage = "验证失败: " + (result ? result.message : "网络或未知错误");
+        }
+      } catch (e) {
+        this.statusMessage = '验证失败：网络或系统错误。';
+        console.error('Error during user ID verification: ' + e);
       }
     },
 
@@ -328,14 +349,22 @@
       return new Promise((resolve) => {
         device.getSerial({
           success: (data) => {
-            if (!data || !data.serial || data.serial === 'NA') {
-              console.error('Failed to get serial: returned an invalid identifier:', data.serial);
+            let serialForProcessing = data ? data.serial : null;
+
+            // If the serial is 'NA' (likely a simulator), replace it with a fixed test ID.
+            if (serialForProcessing === 'NA') {
+              console.warn("Device serial is 'NA'. Using a fixed test serial for activation.");
+              serialForProcessing = 'TESTVM-SN-0123456789'; // A fixed, valid-looking string
+            }
+    
+            if (!serialForProcessing) {
+              console.error('Failed to get a valid serial for processing.');
               resolve(false);
               return;
             }
             
-            // 1. Store the raw system identifier
-            this.rawDeviceId = data.serial;
+            // 1. Store the raw system identifier (which might be the test one)
+            this.rawDeviceId = serialForProcessing;
             
             // 2. Save the raw identifier to storage for the auth-guard
             storage.set({
@@ -371,7 +400,7 @@
                 // 4. Set the displayed code
                 this.displayedDeviceCode = `${String(sumAB).padStart(2, '0')}${String(sumEF).padStart(2, '0')}${String(sumIJ).padStart(2, '0')}${String(sumBFJ).padStart(2, '0')}1`;
                 
-                console.log('Raw Device ID:', this.rawDeviceId);
+                console.log('Using Device ID for activation:', this.rawDeviceId);
                 console.log('Displayed Device Code:', this.displayedDeviceCode);
                 resolve(true);
               },
@@ -441,19 +470,17 @@
         // Use rawDeviceId for server communication
         const result = await ApiService.registerAndGetUserId(this.rawDeviceId);
 
-        if (result.success && (result.userInfo?.id || result.userInfo?.user_number)) {
+        // According to API spec #2 & #3, a successful call always returns success:true and a userInfo object.
+        if (result && result.success && result.userInfo) {
           this.statusMessage = "激活成功！已获取用户ID。";
           await this.handleActivationSuccess(result.userInfo);
         } else {
-          if (result.reason === 'user_id_verification_required') {
-              this.statusMessage = result.message || '此用户名已存在，请输入用户ID以验证。';
-              this.uiState = 'enter_user_id';
-          } else {
-              this.statusMessage = "激活失败: " + (result.error || "无法从服务器获取用户信息");
-          }
+          // Handle generic failure from spec #16, #17 etc.
+          this.statusMessage = "激活失败: " + (result ? result.message : "网络或未知错误");
         }
       } catch (e) {
         this.statusMessage = "激活失败: 网络请求错误，请重试。";
+        console.error('Error during activation: ' + e);
       }
     }
   }

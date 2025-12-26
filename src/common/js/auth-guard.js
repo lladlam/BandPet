@@ -15,59 +15,76 @@ import { CONFIG } from './config.js';
  * @returns {Promise<Object>} An object with: { canAccess: boolean, userInfo: Object|null, message: string }
  */
 async function checkNetworkAccess() {
+  // Helper to promisify storage.get - it resolves with the RAW VALUE.
+  const _promisifiedStorageGet = (key) => {
+    return new Promise((resolve) => {
+      storage.get({
+        key: key,
+        // The 'data' parameter IS the value. Can be undefined if not found.
+        success: (data) => resolve(data),
+        fail: () => resolve(null) // Resolve with null on any failure.
+      });
+    });
+  };
+
+  // Helper to promisify storage.set
+  const _promisifiedStorageSet = (key, value) => {
+    return new Promise((resolve, reject) => {
+      storage.set({
+        key: key,
+        value: value,
+        success: resolve,
+        fail: (err, code) => reject(new Error(`Storage.set failed for key '${key}' with code ${code}: ${err}`))
+      });
+    });
+  };
+
   try {
-    // 1. Check for local activation
-    const localActivation = await storage.get({ key: CONFIG.STORAGE_KEYS.IS_LOCALLY_ACTIVATED });
-    if (localActivation.value !== 'true') {
+    // 1. Check for local activation flag
+    const localActivationValue = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.IS_LOCALLY_ACTIVATED);
+    if (localActivationValue !== 'true') {
       router.push({ uri: 'activate' });
       return { canAccess: false, userInfo: null, message: '设备未激活，请先激活。' };
     }
 
-    // 2. Check for existing User ID
-    const userInfoResult = await storage.get({ key: CONFIG.STORAGE_KEYS.USER_INFO });
-    if (userInfoResult.value) {
-      const userInfo = JSON.parse(userInfoResult.value);
-      if (userInfo && userInfo.id) {
-        console.log('AuthGuard: User ID found in storage.');
-        return { canAccess: true, userInfo: userInfo, message: '验证通过' };
-      }
+    // 2. Check for existing User Info in storage
+    const userInfoJSON = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.USER_INFO);
+    if (userInfoJSON) {
+      try {
+        const userInfo = JSON.parse(userInfoJSON);
+        if (userInfo && userInfo.id) {
+          console.log('AuthGuard: User ID found in storage.');
+          return { canAccess: true, userInfo: userInfo, message: '验证通过' };
+        }
+      } catch(e) { /* Malformed JSON, proceed to fetch from server */ }
     }
 
-    // 3. User ID is missing, try to fetch it
-    console.log('AuthGuard: User ID not found, attempting to fetch from server.');
+    // 3. User Info is missing or malformed, try to fetch it from server
+    console.log('AuthGuard: User Info not found in storage, attempting to recover from server.');
     
-    // We need the device code to get the user ID
-    const deviceCodeResult = await storage.get({ key: CONFIG.STORAGE_KEYS.DEVICE_ID });
-    if (!deviceCodeResult.value) {
-        // This case is unlikely if local activation worked, but good to handle.
+    const deviceCode = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.DEVICE_ID);
+    if (!deviceCode) {
         router.push({ uri: 'activate' });
         return { canAccess: false, userInfo: null, message: '无法找到设备码，请重新激活。' };
     }
-    const deviceCode = deviceCodeResult.value;
 
-    const apiResult = await ApiService.registerAndGetUserId(deviceCode);
+    // Use checkDeviceRegistration to get existing user data
+    const result = await ApiService.checkDeviceRegistration(deviceCode);
 
-    if (apiResult.success && apiResult.userInfo && (apiResult.userInfo.id || apiResult.userInfo.user_number)) {
-      console.log('AuthGuard: Successfully fetched new User ID.');
-      
-      const userInfoToSave = {
-        id: apiResult.userInfo.id || apiResult.userInfo.user_number,
-        user_number: apiResult.userInfo.user_number,
-        pet_name: apiResult.userInfo.pet_name,
-        total_clicks: apiResult.userInfo.total_clicks || 0
-      };
-
-      // Save the newly fetched user info
-      await storage.set({ key: CONFIG.STORAGE_KEYS.USER_INFO, value: JSON.stringify(userInfoToSave) });
-      return { canAccess: true, userInfo: userInfoToSave, message: '用户ID获取成功' };
+    if (result && result.is_registered && result.userInfo) {
+      console.log('AuthGuard: Successfully recovered User Info from server.');
+      await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(result.userInfo));
+      return { canAccess: true, userInfo: result.userInfo, message: '用户ID恢复成功' };
     } else {
-      console.log('AuthGuard: Failed to fetch User ID.');
-      return { canAccess: false, userInfo: null, message: '获取用户ID失败，请检查网络后重试。' };
+      console.log('AuthGuard: Failed to recover User Info, device may not be registered on server.');
+      router.push({ uri: 'activate' }); // Force re-activation
+      return { canAccess: false, userInfo: null, message: '无法恢复用户信息，请重新激活。' };
     }
 
   } catch (e) {
     console.error('AuthGuard: Error during checkNetworkAccess', e);
-    return { canAccess: false, userInfo: null, message: `发生错误: ${e.message}` };
+    router.push({ uri: 'activate' }); // On any catastrophic error, default to re-activation
+    return { canAccess: false, userInfo: null, message: `发生致命错误: ${e.message}` };
   }
 }
 
