@@ -82,6 +82,26 @@ class ApiService {
     }
   }
 
+  // 从服务器同步数据
+  async syncFromServer(userId) {
+    try {
+      const result = await this.request('sync_from_server', {
+        user_id: userId
+      });
+      
+      if (result && result.success) {
+        console.log('从服务器同步数据成功:', result.userInfo);
+        return { success: true, userInfo: result.userInfo };
+      } else {
+        console.error('同步数据失败:', result ? result.error : '未知错误');
+        return { success: false, error: (result ? result.error : '服务器未返回成功状态') };
+      }
+    } catch (error) {
+      console.error('从服务器同步数据时发生网络错误:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   // 检查宠物名是否可用
   async checkPetNameAvailability(petName) {
     try {
@@ -134,21 +154,6 @@ class ApiService {
       });
     } catch (error) {
       console.error('注册或获取用户ID时发生网络错误:', error);
-      // Return a compatible error object
-      return { success: false, message: error.message };
-    }
-  }
-
-  // 验证用户ID并恢复数据
-  async verifyUserIdAndRestore(deviceId, userId) {
-    try {
-      // Pass the server response directly to the UI layer
-      return await this.request('verify_user_id_and_restore', {
-        device_id: deviceId,
-        user_id: userId
-      });
-    } catch (error) {
-      console.error('验证用户ID时发生网络错误:', error);
       // Return a compatible error object
       return { success: false, message: error.message };
     }

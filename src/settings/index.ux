@@ -21,6 +21,9 @@
         </div>
       </div>
     </div>
+    <div class="sync-button" onclick="handleCloudSync">
+        <text class="sync-button-text">云端同步</text>
+    </div>
     <div class="about-button" onclick="goToAbout">
         <text class="about-button-text">关于</text>
     </div>
@@ -51,16 +54,14 @@
     padding: 0 20px;
     flex-direction: row;
     align-items: center;
-    justify-content: flex-start;
+    justify-content: center; /* Center title block */
+    position: relative; /* Anchor for back button */
   }
   .page-header-back-button {
     width: 80px;
     height: 80px;
-    border-radius: 40px;
-    background-color: #1E90FF;
-    justify-content: center;
-    align-items: center;
-    margin-right: 10px;
+    position: absolute;
+    left: 20px;
   }
   .page-header-title {
     color: #FFFFFF;
@@ -98,20 +99,25 @@
     color: #FFFFFF;
     font-size: 30px;
   }
-  .about-button {
+  .about-button, .sync-button {
     position: absolute;
-    right: 20px;
     bottom: 30px;
-    width: 120px;
+    width: 140px; /* Increased width */
     height: 60px;
-    background-color: #1A1A1A; /* Even darker grey */
+    background-color: #1A1A1A;
     border-radius: 30px;
     justify-content: center;
     align-items: center;
   }
-  .about-button-text {
+  .about-button {
+    right: 20px;
+  }
+  .sync-button {
+    left: 20px;
+  }
+  .about-button-text, .sync-button-text {
     color: #FFFFFF;
-    font-size: 30px;
+    font-size: 28px; /* Adjusted font size */
   }
 </style>
 
@@ -119,6 +125,17 @@
   import router from '@system.router';
   import storage from '@system.storage';
   import { CONFIG } from '../common/js/config.js';
+
+  // Promisified helper for storage.get to handle async/await correctly.
+  const _promisifiedStorageGet = (key) => {
+    return new Promise((resolve) => {
+      storage.get({
+        key: key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      });
+    });
+  };
 
   export default {
     data: {
@@ -129,26 +146,32 @@
     onInit() {
       this.loadUserInfo();
       this.updateTime();
-      setInterval(this.updateTime, 5000); // Update every 5 seconds
+      setInterval(this.updateTime, 10000); // Update every 5 seconds
     },
     async loadUserInfo() {
+      console.log('[SettingsPage] Loading user info...');
       try {
-        const userInfoResult = await storage.get({ key: CONFIG.STORAGE_KEYS.USER_INFO });
-        if (userInfoResult.value) {
-          const userInfo = JSON.parse(userInfoResult.value);
-          if (userInfo) {
+        const userInfoJSON = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.USER_INFO);
+
+        if (userInfoJSON) {
+          console.log('[SettingsPage] Found user info data in storage.');
+          const userInfo = JSON.parse(userInfoJSON);
+          if (userInfo && userInfo.id) {
             this.petName = userInfo.pet_name || '(无名)';
             this.userId = userInfo.id || '无';
+            console.log(`[SettingsPage] Successfully loaded user info: Name='${this.petName}', ID='${this.userId}'`);
           } else {
-            this.petName = '(未激活)';
+            console.warn('[SettingsPage] User info data was found, but it was invalid (missing id).');
+            this.petName = '信息无效';
             this.userId = '无';
           }
         } else {
-            this.petName = '(未激活)';
+            console.warn('[SettingsPage] Could not find user info in storage.');
+            this.petName = '无信息';
             this.userId = '无';
         }
       } catch (e) {
-        console.error("Error loading user info in settings:", e);
+        console.error("[SettingsPage] A critical error occurred while loading user info:", e);
         this.petName = '加载失败';
         this.userId = '加载失败';
       }
@@ -158,6 +181,11 @@
       const hours = now.getHours().toString().padStart(2, '0');
       const minutes = now.getMinutes().toString().padStart(2, '0');
       this.time = `${hours}:${minutes}`;
+    },
+    async handleCloudSync() {
+      router.push({
+        uri: 'sync'
+      });
     },
     goBack() {
       router.back();

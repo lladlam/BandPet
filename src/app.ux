@@ -1,30 +1,20 @@
 <script>
-  import router from '@system.router';
-  import authGuard from './common/js/auth-guard.js';
+  import UserService from './common/js/userService.js';
 
   export default {
     async onCreate() {
-      console.log('[lifecycle] [app] onCreate - Running activation check.');
-      
+      console.log('[lifecycle] [app] onCreate - Ensuring user is registered...');
       try {
-        const result = await authGuard.checkNetworkAccess();
-        
-        if (result && result.canAccess) {
-          // If auth guard passes, it means we are activated and have user info.
-          // We need to manually route to the main page.
-          console.log('AuthGuard check passed. Navigating to main page.');
-          router.replace({
-            uri: 'main'
-          });
+        const userInfo = await UserService.ensureUserIsRegistered();
+        if (userInfo) {
+          console.log('[lifecycle] [app] User registration confirmed successfully.');
         } else {
-          // If auth guard fails (returns canAccess: false), it has already
-          // handled the redirection to the 'activate' page internally.
-          console.log('AuthGuard check failed. Redirection to activate page is handled by the guard.');
+          console.error('[lifecycle] [app] Failed to confirm user registration.');
+          // In a real app, you might want to show a non-closable error page here.
+          // For now, we'll let it proceed, but features requiring a user ID may fail.
         }
       } catch (e) {
         console.error('A critical error occurred during app startup in app.ux:', e);
-        // As a last resort, navigate to the activation page.
-        router.replace({ uri: 'activate' });
       }
     },
 

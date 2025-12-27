@@ -23,7 +23,7 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                 NAME: 'BandPet',
                                 VERSION: '0.3.5 Alpha',
                                 MAX_CLICKS_PER_BATCH: 50,
-                                SYNC_INTERVAL: 300000,
+                                SYNC_INTERVAL: 60000,
                                 RANK_LIMIT: 10
                             },
                             STORAGE_KEYS: {
@@ -113,7 +113,8 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                 paddingLeft: "20px",
                                 flexDirection: "row",
                                 alignItems: "center",
-                                justifyContent: "flex-start"
+                                justifyContent: "center",
+                                position: "relative"
                             }
                         ],
                         [
@@ -126,11 +127,8 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                             {
                                 width: "80px",
                                 height: "80px",
-                                borderRadius: "40px",
-                                backgroundColor: "#1e90ff",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                marginRight: "10px"
+                                position: "absolute",
+                                left: "20px"
                             }
                         ],
                         [
@@ -237,14 +235,33 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                             ],
                             {
                                 position: "absolute",
-                                right: "20px",
                                 bottom: "30px",
-                                width: "120px",
+                                width: "140px",
                                 height: "60px",
                                 backgroundColor: "#1a1a1a",
                                 borderRadius: "30px",
                                 justifyContent: "center",
-                                alignItems: "center"
+                                alignItems: "center",
+                                right: "20px"
+                            }
+                        ],
+                        [
+                            [
+                                [
+                                    0,
+                                    "sync-button"
+                                ]
+                            ],
+                            {
+                                position: "absolute",
+                                bottom: "30px",
+                                width: "140px",
+                                height: "60px",
+                                backgroundColor: "#1a1a1a",
+                                borderRadius: "30px",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                left: "20px"
                             }
                         ],
                         [
@@ -256,7 +273,19 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                             ],
                             {
                                 color: "#ffffff",
-                                fontSize: "30px"
+                                fontSize: "28px"
+                            }
+                        ],
+                        [
+                            [
+                                [
+                                    0,
+                                    "sync-button-text"
+                                ]
+                            ],
+                            {
+                                color: "#ffffff",
+                                fontSize: "28px"
                             }
                         ]
                     ];
@@ -274,6 +303,13 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                 default: e
                             };
                         }
+                        const _promisifiedStorageGet = (key)=>new Promise((resolve)=>{
+                                _system2.default.get({
+                                    key: key,
+                                    success: (data)=>resolve(data),
+                                    fail: ()=>resolve(null)
+                                });
+                            });
                         var _default = exports.default = {
                             data: {
                                 time: '00:00',
@@ -283,28 +319,31 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                             onInit () {
                                 this.loadUserInfo();
                                 this.updateTime();
-                                setInterval(this.updateTime, 5000);
+                                setInterval(this.updateTime, 10000);
                             },
                             async loadUserInfo () {
+                                console.log('[SettingsPage] Loading user info...');
                                 try {
-                                    const userInfoResult = await _system2.default.get({
-                                        key: _config.CONFIG.STORAGE_KEYS.USER_INFO
-                                    });
-                                    if (userInfoResult.value) {
-                                        const userInfo = JSON.parse(userInfoResult.value);
-                                        if (userInfo) {
+                                    const userInfoJSON = await _promisifiedStorageGet(_config.CONFIG.STORAGE_KEYS.USER_INFO);
+                                    if (userInfoJSON) {
+                                        console.log('[SettingsPage] Found user info data in storage.');
+                                        const userInfo = JSON.parse(userInfoJSON);
+                                        if (userInfo && userInfo.id) {
                                             this.petName = userInfo.pet_name || '(无名)';
                                             this.userId = userInfo.id || '无';
+                                            console.log(`[SettingsPage] Successfully loaded user info: Name='${this.petName}', ID='${this.userId}'`);
                                         } else {
-                                            this.petName = '(未激活)';
+                                            console.warn('[SettingsPage] User info data was found, but it was invalid (missing id).');
+                                            this.petName = '信息无效';
                                             this.userId = '无';
                                         }
                                     } else {
-                                        this.petName = '(未激活)';
+                                        console.warn('[SettingsPage] Could not find user info in storage.');
+                                        this.petName = '无信息';
                                         this.userId = '无';
                                     }
                                 } catch (e) {
-                                    console.error("Error loading user info in settings:", e);
+                                    console.error("[SettingsPage] A critical error occurred while loading user info:", e);
                                     this.petName = '加载失败';
                                     this.userId = '加载失败';
                                 }
@@ -314,6 +353,11 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                 const hours = now.getHours().toString().padStart(2, '0');
                                 const minutes = now.getMinutes().toString().padStart(2, '0');
                                 this.time = `${hours}:${minutes}`;
+                            },
+                            async handleCloudSync () {
+                                _system.default.push({
+                                    uri: 'sync'
+                                });
                             },
                             goBack () {
                                 _system.default.back();
@@ -498,6 +542,29 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                 __vm__: _vm_,
                                 __opts__: {
                                     classList: [
+                                        "sync-button"
+                                    ],
+                                    events: {
+                                        click: function(evt) {
+                                            return _vm_.handleCloudSync(evt);
+                                        }
+                                    }
+                                }
+                            }, [
+                                aiot.__ce__("text", {
+                                    __vm__: _vm_,
+                                    __opts__: {
+                                        classList: [
+                                            "sync-button-text"
+                                        ],
+                                        value: "云端同步"
+                                    }
+                                }, [])
+                            ]),
+                            aiot.__ce__("div", {
+                                __vm__: _vm_,
+                                __opts__: {
+                                    classList: [
                                         "about-button"
                                     ],
                                     events: {
@@ -530,5 +597,3 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
         return createPageHandler();
     })(global, globalThis, window, $app_exports$, $app_evaluate$);
 }
-
-//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoic2V0dGluZ3NcXGluZGV4LmpzIiwic291cmNlcyI6WyJ3ZWJwYWNrOi8vQmFuZFBldC9zcmMvY29tbW9uL2pzL2NvbmZpZy5qcyIsIndlYnBhY2s6Ly9CYW5kUGV0L3dlYnBhY2svcnVudGltZS9yc3BhY2tfdmVyc2lvbiIsIndlYnBhY2s6Ly9CYW5kUGV0L3dlYnBhY2svcnVudGltZS9yc3BhY2tfdW5pcXVlX2lkIiwid2VicGFjazovL0JhbmRQZXQvc3JjL3NldHRpbmdzL2luZGV4LnV4Il0sInNvdXJjZXNDb250ZW50IjpbIi8vIGNvbmZpZy5qc1xyXG5leHBvcnQgY29uc3QgQ09ORklHID0ge1xyXG4gIC8vIOS4rei9rOacjeWKoeWZqOmFjee9rlxyXG4gIFNFUlZFUjoge1xyXG4gICAgQkFTRV9VUkw6ICdodHRwOi8vMTAzLjIwNS4yNTMuODc6MjIyMDcnXHJcbiAgfSxcclxuICBcclxuICAvLyDms6jmhI/vvJpVUkwg5YmN57yA5ZyoIGFwaS1zZXJ2aWNlLmpzIOS4reehrOe8lueggeS6hlxyXG4gIC8vIOi/memHjOS4jeWGjemcgOimgemFjee9rlxyXG4gIFxyXG4gIC8vIOW6lOeUqOmFjee9rlxyXG4gIEFQUDoge1xyXG4gICAgTkFNRTogJ0JhbmRQZXQnLFxyXG4gICAgVkVSU0lPTjogJzAuMy41IEFscGhhJyxcclxuICAgIE1BWF9DTElDS1NfUEVSX0JBVENIOiA1MCxcclxuICAgIFNZTkNfSU5URVJWQUw6IDMwMDAwMCxcclxuICAgIFJBTktfTElNSVQ6IDEwXHJcbiAgfSxcclxuICBcclxuICAvLyDlrZjlgqjplK7lkI1cclxuICBTVE9SQUdFX0tFWVM6IHtcclxuICAgIERFVklDRV9JRDogJ2RldmljZV9pZCcsXHJcbiAgICBJU19MT0NBTExZX0FDVElWQVRFRDogJ2lzX2xvY2FsbHlfYWN0aXZhdGVkJyxcclxuICAgIFVTRVJfSU5GTzogJ3VzZXJfaW5mbycsXHJcbiAgICBQRU5ESU5HX0NMSUNLUzogJ3BlbmRpbmdfY2xpY2tzJyxcclxuICAgIExBU1RfU1lOQ19USU1FOiAnbGFzdF9zeW5jX3RpbWUnLFxyXG4gICAgVE9UQUxfQ0xJQ0tTOiAndG90YWxfY2xpY2tzJ1xyXG4gIH1cclxufVxyXG4iLCJfX3dlYnBhY2tfcmVxdWlyZV9fLnJ2ID0gKCkgPT4gKFwiMS42LjhcIikiLCJfX3dlYnBhY2tfcmVxdWlyZV9fLnJ1aWQgPSBcImJ1bmRsZXI9cnNwYWNrQDEuNi44XCI7IiwiPHRlbXBsYXRlPlxyXG4gIDxkaXYgY2xhc3M9XCJwYWdlLWNvbnRhaW5lclwiPlxyXG4gICAgPGRpdiBjbGFzcz1cInBhZ2UtaGVhZGVyLWNvbnRhaW5lclwiPlxyXG4gICAgICA8ZGl2IGNsYXNzPVwicGFnZS1oZWFkZXJcIj5cclxuICAgICAgICA8aW1hZ2Ugc3JjPVwiLi4vY29tbW9uL2JhY2sucG5nXCIgY2xhc3M9XCJwYWdlLWhlYWRlci1iYWNrLWJ1dHRvblwiIG9uY2xpY2s9XCJnb0JhY2tcIj48L2ltYWdlPlxyXG4gICAgICAgIDxkaXYgY2xhc3M9XCJoZWFkZXItdGl0bGUtdGltZVwiPlxyXG4gICAgICAgICAgPHRleHQgY2xhc3M9XCJwYWdlLXRpbWUtZGlzcGxheVwiPnt7IHRpbWUgfX08L3RleHQ+XHJcbiAgICAgICAgICA8dGV4dCBjbGFzcz1cInBhZ2UtaGVhZGVyLXRpdGxlXCI+6K6+572uPC90ZXh0PlxyXG4gICAgICAgIDwvZGl2PlxyXG4gICAgICA8L2Rpdj5cclxuICAgIDwvZGl2PlxyXG4gICAgPGRpdiBjbGFzcz1cInBhZ2UtY29udGVudFwiPlxyXG4gICAgICA8ZGl2IGNsYXNzPVwic2V0dGluZ3MtY29udGVudFwiPlxyXG4gICAgICAgIDxkaXYgY2xhc3M9XCJpbmZvLWl0ZW1cIj5cclxuICAgICAgICAgIDx0ZXh0IGNsYXNzPVwiaW5mby1sYWJlbFwiPuaCqOeahOWuoOeJqTo8L3RleHQ+XHJcbiAgICAgICAgICA8dGV4dCBjbGFzcz1cImluZm8tdmFsdWVcIj57eyBwZXROYW1lIH19PC90ZXh0PlxyXG4gICAgICAgIDwvZGl2PlxyXG4gICAgICAgIDxkaXYgY2xhc3M9XCJpbmZvLWl0ZW1cIj5cclxuICAgICAgICAgIDx0ZXh0IGNsYXNzPVwiaW5mby1sYWJlbFwiPklEOjwvdGV4dD5cclxuICAgICAgICAgIDx0ZXh0IGNsYXNzPVwiaW5mby12YWx1ZVwiPnt7IHVzZXJJZCB9fTwvdGV4dD5cclxuICAgICAgICA8L2Rpdj5cclxuICAgICAgPC9kaXY+XHJcbiAgICA8L2Rpdj5cclxuICAgIDxkaXYgY2xhc3M9XCJhYm91dC1idXR0b25cIiBvbmNsaWNrPVwiZ29Ub0Fib3V0XCI+XHJcbiAgICAgICAgPHRleHQgY2xhc3M9XCJhYm91dC1idXR0b24tdGV4dFwiPuWFs+S6jjwvdGV4dD5cclxuICAgIDwvZGl2PlxyXG4gIDwvZGl2PlxyXG48L3RlbXBsYXRlPlxyXG5cclxuPHN0eWxlPlxyXG4gIC5wYWdlLWNvbnRhaW5lciB7XHJcbiAgICBwb3NpdGlvbjogcmVsYXRpdmU7IC8qIEFkZCB0aGlzIGZvciBhYnNvbHV0ZSBwb3NpdGlvbmluZyBjb250ZXh0ICovXHJcbiAgICBmbGV4LWRpcmVjdGlvbjogY29sdW1uO1xyXG4gICAgYWxpZ24taXRlbXM6IGNlbnRlcjtcclxuICAgIGJhY2tncm91bmQtY29sb3I6ICMwMDAwMDA7XHJcbiAgICB3aWR0aDogMTAwJTtcclxuICAgIGhlaWdodDogMTAwJTtcclxuICB9XHJcbiAgLnBhZ2UtaGVhZGVyLWNvbnRhaW5lciB7XHJcbiAgICB3aWR0aDogMTAwJTtcclxuICAgIG1hcmdpbi1ib3R0b206IDIwcHg7XHJcbiAgfVxyXG4gIC5wYWdlLXRpbWUtZGlzcGxheSB7XHJcbiAgICBjb2xvcjogI0ZGRkZGRjtcclxuICAgIGZvbnQtc2l6ZTogMjRweDtcclxuICAgIG1hcmdpbi1ib3R0b206IDJweDtcclxuICB9XHJcbiAgLnBhZ2UtaGVhZGVyIHtcclxuICAgIHdpZHRoOiAxMDAlO1xyXG4gICAgaGVpZ2h0OiA5MHB4O1xyXG4gICAgcGFkZGluZzogMCAyMHB4O1xyXG4gICAgZmxleC1kaXJlY3Rpb246IHJvdztcclxuICAgIGFsaWduLWl0ZW1zOiBjZW50ZXI7XHJcbiAgICBqdXN0aWZ5LWNvbnRlbnQ6IGZsZXgtc3RhcnQ7XHJcbiAgfVxyXG4gIC5wYWdlLWhlYWRlci1iYWNrLWJ1dHRvbiB7XHJcbiAgICB3aWR0aDogODBweDtcclxuICAgIGhlaWdodDogODBweDtcclxuICAgIGJvcmRlci1yYWRpdXM6IDQwcHg7XHJcbiAgICBiYWNrZ3JvdW5kLWNvbG9yOiAjMUU5MEZGO1xyXG4gICAganVzdGlmeS1jb250ZW50OiBjZW50ZXI7XHJcbiAgICBhbGlnbi1pdGVtczogY2VudGVyO1xyXG4gICAgbWFyZ2luLXJpZ2h0OiAxMHB4O1xyXG4gIH1cclxuICAucGFnZS1oZWFkZXItdGl0bGUge1xyXG4gICAgY29sb3I6ICNGRkZGRkY7XHJcbiAgICBmb250LXNpemU6IDMycHg7XHJcbiAgfVxyXG4gIC5oZWFkZXItdGl0bGUtdGltZSB7XHJcbiAgICBmbGV4LWRpcmVjdGlvbjogY29sdW1uO1xyXG4gICAgYWxpZ24taXRlbXM6IGNlbnRlcjtcclxuICB9XHJcbiAgLnBhZ2UtY29udGVudCB7XHJcbiAgICBmbGV4LWRpcmVjdGlvbjogY29sdW1uO1xyXG4gICAgd2lkdGg6IDEwMCU7XHJcbiAgICBoZWlnaHQ6IDEwMCU7XHJcbiAgICBhbGlnbi1pdGVtczogY2VudGVyO1xyXG4gIH1cclxuICAuc2V0dGluZ3MtY29udGVudCB7XHJcbiAgICBmbGV4LWRpcmVjdGlvbjogY29sdW1uO1xyXG4gICAgd2lkdGg6IDkwJTtcclxuICAgIG1hcmdpbi10b3A6IDEwcHg7XHJcbiAgfVxyXG4gIC5pbmZvLWl0ZW0ge1xyXG4gICAgZmxleC1kaXJlY3Rpb246IHJvdztcclxuICAgIGp1c3RpZnktY29udGVudDogc3BhY2UtYmV0d2VlbjtcclxuICAgIGFsaWduLWl0ZW1zOiBjZW50ZXI7XHJcbiAgICBtYXJnaW4tYm90dG9tOiAyMHB4O1xyXG4gICAgcGFkZGluZzogMjBweDtcclxuICAgIGJhY2tncm91bmQtY29sb3I6ICMxQTFBMUE7IC8qIEV2ZW4gZGFya2VyIGdyZXkgKi9cclxuICAgIGJvcmRlci1yYWRpdXM6IDE1cHg7XHJcbiAgfVxyXG4gIC5pbmZvLWxhYmVsIHtcclxuICAgIGNvbG9yOiAjQUFBQUFBO1xyXG4gICAgZm9udC1zaXplOiAzMHB4O1xyXG4gIH1cclxuICAuaW5mby12YWx1ZSB7XHJcbiAgICBjb2xvcjogI0ZGRkZGRjtcclxuICAgIGZvbnQtc2l6ZTogMzBweDtcclxuICB9XHJcbiAgLmFib3V0LWJ1dHRvbiB7XHJcbiAgICBwb3NpdGlvbjogYWJzb2x1dGU7XHJcbiAgICByaWdodDogMjBweDtcclxuICAgIGJvdHRvbTogMzBweDtcclxuICAgIHdpZHRoOiAxMjBweDtcclxuICAgIGhlaWdodDogNjBweDtcclxuICAgIGJhY2tncm91bmQtY29sb3I6ICMxQTFBMUE7IC8qIEV2ZW4gZGFya2VyIGdyZXkgKi9cclxuICAgIGJvcmRlci1yYWRpdXM6IDMwcHg7XHJcbiAgICBqdXN0aWZ5LWNvbnRlbnQ6IGNlbnRlcjtcclxuICAgIGFsaWduLWl0ZW1zOiBjZW50ZXI7XHJcbiAgfVxyXG4gIC5hYm91dC1idXR0b24tdGV4dCB7XHJcbiAgICBjb2xvcjogI0ZGRkZGRjtcclxuICAgIGZvbnQtc2l6ZTogMzBweDtcclxuICB9XHJcbjwvc3R5bGU+XHJcblxyXG48c2NyaXB0PlxyXG4gIGltcG9ydCByb3V0ZXIgZnJvbSAnQHN5c3RlbS5yb3V0ZXInO1xyXG4gIGltcG9ydCBzdG9yYWdlIGZyb20gJ0BzeXN0ZW0uc3RvcmFnZSc7XHJcbiAgaW1wb3J0IHsgQ09ORklHIH0gZnJvbSAnLi4vY29tbW9uL2pzL2NvbmZpZy5qcyc7XHJcblxyXG4gIGV4cG9ydCBkZWZhdWx0IHtcclxuICAgIGRhdGE6IHtcclxuICAgICAgdGltZTogJzAwOjAwJyxcclxuICAgICAgcGV0TmFtZTogJ+WKoOi9veS4rS4uLicsXHJcbiAgICAgIHVzZXJJZDogJ+WKoOi9veS4rS4uLidcclxuICAgIH0sXHJcbiAgICBvbkluaXQoKSB7XHJcbiAgICAgIHRoaXMubG9hZFVzZXJJbmZvKCk7XHJcbiAgICAgIHRoaXMudXBkYXRlVGltZSgpO1xyXG4gICAgICBzZXRJbnRlcnZhbCh0aGlzLnVwZGF0ZVRpbWUsIDUwMDApOyAvLyBVcGRhdGUgZXZlcnkgNSBzZWNvbmRzXHJcbiAgICB9LFxyXG4gICAgYXN5bmMgbG9hZFVzZXJJbmZvKCkge1xyXG4gICAgICB0cnkge1xyXG4gICAgICAgIGNvbnN0IHVzZXJJbmZvUmVzdWx0ID0gYXdhaXQgc3RvcmFnZS5nZXQoeyBrZXk6IENPTkZJRy5TVE9SQUdFX0tFWVMuVVNFUl9JTkZPIH0pO1xyXG4gICAgICAgIGlmICh1c2VySW5mb1Jlc3VsdC52YWx1ZSkge1xyXG4gICAgICAgICAgY29uc3QgdXNlckluZm8gPSBKU09OLnBhcnNlKHVzZXJJbmZvUmVzdWx0LnZhbHVlKTtcclxuICAgICAgICAgIGlmICh1c2VySW5mbykge1xyXG4gICAgICAgICAgICB0aGlzLnBldE5hbWUgPSB1c2VySW5mby5wZXRfbmFtZSB8fCAnKOaXoOWQjSknO1xyXG4gICAgICAgICAgICB0aGlzLnVzZXJJZCA9IHVzZXJJbmZvLmlkIHx8ICfml6AnO1xyXG4gICAgICAgICAgfSBlbHNlIHtcclxuICAgICAgICAgICAgdGhpcy5wZXROYW1lID0gJyjmnKrmv4DmtLspJztcclxuICAgICAgICAgICAgdGhpcy51c2VySWQgPSAn5pegJztcclxuICAgICAgICAgIH1cclxuICAgICAgICB9IGVsc2Uge1xyXG4gICAgICAgICAgICB0aGlzLnBldE5hbWUgPSAnKOacqua/gOa0uyknO1xyXG4gICAgICAgICAgICB0aGlzLnVzZXJJZCA9ICfml6AnO1xyXG4gICAgICAgIH1cclxuICAgICAgfSBjYXRjaCAoZSkge1xyXG4gICAgICAgIGNvbnNvbGUuZXJyb3IoXCJFcnJvciBsb2FkaW5nIHVzZXIgaW5mbyBpbiBzZXR0aW5nczpcIiwgZSk7XHJcbiAgICAgICAgdGhpcy5wZXROYW1lID0gJ+WKoOi9veWksei0pSc7XHJcbiAgICAgICAgdGhpcy51c2VySWQgPSAn5Yqg6L295aSx6LSlJztcclxuICAgICAgfVxyXG4gICAgfSxcclxuICAgIHVwZGF0ZVRpbWUoKSB7XHJcbiAgICAgIGNvbnN0IG5vdyA9IG5ldyBEYXRlKCk7XHJcbiAgICAgIGNvbnN0IGhvdXJzID0gbm93LmdldEhvdXJzKCkudG9TdHJpbmcoKS5wYWRTdGFydCgyLCAnMCcpO1xyXG4gICAgICBjb25zdCBtaW51dGVzID0gbm93LmdldE1pbnV0ZXMoKS50b1N0cmluZygpLnBhZFN0YXJ0KDIsICcwJyk7XHJcbiAgICAgIHRoaXMudGltZSA9IGAke2hvdXJzfToke21pbnV0ZXN9YDtcclxuICAgIH0sXHJcbiAgICBnb0JhY2soKSB7XHJcbiAgICAgIHJvdXRlci5iYWNrKCk7XHJcbiAgICB9LFxyXG4gICAgZ29Ub0Fib3V0KCkge1xyXG4gICAgICByb3V0ZXIucHVzaCh7XHJcbiAgICAgICAgdXJpOiAnYWJvdXQnXHJcbiAgICAgIH0pO1xyXG4gICAgfVxyXG4gIH1cclxuPC9zY3JpcHQ+Il0sIm5hbWVzIjpbIkNPTkZJRyIsImV4cG9ydHMiLCJTRVJWRVIiLCJCQVNFX1VSTCIsIkFQUCIsIk5BTUUiLCJWRVJTSU9OIiwiTUFYX0NMSUNLU19QRVJfQkFUQ0giLCJTWU5DX0lOVEVSVkFMIiwiUkFOS19MSU1JVCIsIlNUT1JBR0VfS0VZUyIsIkRFVklDRV9JRCIsIklTX0xPQ0FMTFlfQUNUSVZBVEVEIiwiVVNFUl9JTkZPIiwiUEVORElOR19DTElDS1MiLCJMQVNUX1NZTkNfVElNRSIsIlRPVEFMX0NMSUNLUyIsIl9fd2VicGFja19yZXF1aXJlX18iLCJfc3lzdGVtIiwiX2ludGVyb3BSZXF1aXJlRGVmYXVsdCIsIiRhcHBfcmVxdWlyZSQiLCJfc3lzdGVtMiIsIl9jb25maWciLCJyZXF1aXJlIiwiZSIsIl9fZXNNb2R1bGUiLCJkZWZhdWx0IiwiX2RlZmF1bHQiLCJkYXRhIiwidGltZSIsInBldE5hbWUiLCJ1c2VySWQiLCJvbkluaXQiLCJsb2FkVXNlckluZm8iLCJ1cGRhdGVUaW1lIiwic2V0SW50ZXJ2YWwiLCJ1c2VySW5mb1Jlc3VsdCIsInN0b3JhZ2UiLCJnZXQiLCJrZXkiLCJ2YWx1ZSIsInVzZXJJbmZvIiwiSlNPTiIsInBhcnNlIiwicGV0X25hbWUiLCJpZCIsImNvbnNvbGUiLCJlcnJvciIsIm5vdyIsIkRhdGUiLCJob3VycyIsImdldEhvdXJzIiwidG9TdHJpbmciLCJwYWRTdGFydCIsIm1pbnV0ZXMiLCJnZXRNaW51dGVzIiwiZ29CYWNrIiwicm91dGVyIiwiYmFjayIsImdvVG9BYm91dCIsInB1c2giLCJ1cmkiXSwibWFwcGluZ3MiOiI7Ozs7Ozs7Ozs7Ozs7Ozs7O3dCQUNPLE1BQU1BLFNBQU1DLFFBQUFBLE1BQUEsR0FBRzs0QkFFcEJDLFFBQVE7Z0NBQ05DLFVBQVU7NEJBQ1o7NEJBTUFDLEtBQUs7Z0NBQ0hDLE1BQU07Z0NBQ05DLFNBQVM7Z0NBQ1RDLHNCQUFzQjtnQ0FDdEJDLGVBQWU7Z0NBQ2ZDLFlBQVk7NEJBQ2Q7NEJBR0FDLGNBQWM7Z0NBQ1pDLFdBQVc7Z0NBQ1hDLHNCQUFzQjtnQ0FDdEJDLFdBQVc7Z0NBQ1hDLGdCQUFnQjtnQ0FDaEJDLGdCQUFnQjtnQ0FDaEJDLGNBQWM7NEJBQ2hCO3dCQUNGOzs7Ozs7Ozs7Ozs7OztvQkM1QkFDLG9CQUFvQixFQUFFLEdBQUcsSUFBTzs7O29CQ0FoQ0Esb0JBQW9CLElBQUksR0FBRzs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7Ozs7d0JDc0h6QixJQUFBQyxVQUFBQyx1QkFBQUMsZUFBQTt3QkFDQSxJQUFBQyxXQUFBRix1QkFBQUMsZUFBQTt3QkFDQSxJQUFBRSxVQUFBQyxvQkFBQTt3QkFBZ0QsU0FBQUosdUJBQUFLLENBQUE7NEJBQUEsT0FBQUEsS0FBQUEsRUFBQUMsVUFBQSxHQUFBRCxJQUFBO2dDQUFBRSxTQUFBRjs0QkFBQTt3QkFBQTt3QkFBQSxJQUFBRyxXQUFBMUIsUUFBQXlCLE9BQUEsR0FFakM7NEJBQ2JFLE1BQU07Z0NBQ0pDLE1BQU07Z0NBQ05DLFNBQVM7Z0NBQ1RDLFFBQVE7NEJBQ1Y7NEJBQ0FDO2dDQUNFLElBQUksQ0FBQ0MsWUFBWTtnQ0FDakIsSUFBSSxDQUFDQyxVQUFVO2dDQUNmQyxZQUFZLElBQUksQ0FBQ0QsVUFBVSxFQUFFOzRCQUMvQjs0QkFDQSxNQUFNRDtnQ0FDSixJQUFJO29DQUNGLE1BQU1HLGlCQUFpQixNQUFNQyxTQUFBQSxPQUFPLENBQUNDLEdBQUcsQ0FBQzt3Q0FBRUMsS0FBS3ZDLFFBQUFBLE1BQU0sQ0FBQ1UsWUFBWSxDQUFDRyxTQUFTO29DQUFDO29DQUM5RSxJQUFJdUIsZUFBZUksS0FBSyxFQUFFO3dDQUN4QixNQUFNQyxXQUFXQyxLQUFLQyxLQUFLLENBQUNQLGVBQWVJLEtBQUs7d0NBQ2hELElBQUlDLFVBQVU7NENBQ1osSUFBSSxDQUFDWCxPQUFPLEdBQUdXLFNBQVNHLFFBQVEsSUFBSTs0Q0FDcEMsSUFBSSxDQUFDYixNQUFNLEdBQUdVLFNBQVNJLEVBQUUsSUFBSTt3Q0FDL0IsT0FBTzs0Q0FDTCxJQUFJLENBQUNmLE9BQU8sR0FBRzs0Q0FDZixJQUFJLENBQUNDLE1BQU0sR0FBRzt3Q0FDaEI7b0NBQ0YsT0FBTzt3Q0FDSCxJQUFJLENBQUNELE9BQU8sR0FBRzt3Q0FDZixJQUFJLENBQUNDLE1BQU0sR0FBRztvQ0FDbEI7Z0NBQ0YsRUFBRSxPQUFPUCxHQUFHO29DQUNWc0IsUUFBUUMsS0FBSyxDQUFDLHdDQUF3Q3ZCO29DQUN0RCxJQUFJLENBQUNNLE9BQU8sR0FBRztvQ0FDZixJQUFJLENBQUNDLE1BQU0sR0FBRztnQ0FDaEI7NEJBQ0Y7NEJBQ0FHO2dDQUNFLE1BQU1jLE1BQU0sSUFBSUM7Z0NBQ2hCLE1BQU1DLFFBQVFGLElBQUlHLFFBQVEsR0FBR0MsUUFBUSxHQUFHQyxRQUFRLENBQUMsR0FBRztnQ0FDcEQsTUFBTUMsVUFBVU4sSUFBSU8sVUFBVSxHQUFHSCxRQUFRLEdBQUdDLFFBQVEsQ0FBQyxHQUFHO2dDQUN4RCxJQUFJLENBQUN4QixJQUFJLEdBQUcsR0FBR3FCLE1BQU0sQ0FBQyxFQUFFSSxTQUFTOzRCQUNuQzs0QkFDQUU7Z0NBQ0VDLFFBQUFBLE9BQU0sQ0FBQ0MsSUFBSTs0QkFDYjs0QkFDQUM7Z0NBQ0VGLFFBQUFBLE9BQU0sQ0FBQ0csSUFBSSxDQUFDO29DQUNWQyxLQUFLO2dDQUNQOzRCQUNGO3dCQUNGIn0=

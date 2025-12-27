@@ -13,7 +13,7 @@ export const CONFIG = {
     NAME: 'BandPet',
     VERSION: '0.3.5 Alpha',
     MAX_CLICKS_PER_BATCH: 50,
-    SYNC_INTERVAL: 300000,
+    SYNC_INTERVAL: 60000,
     RANK_LIMIT: 10
   },
   

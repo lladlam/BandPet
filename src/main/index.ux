@@ -35,7 +35,7 @@
     position: absolute;
     top: 14px;
     color: #FFFFFF;
-    font-size: 21px;
+    font-size: 24px;
   }
   .left-chest, .right-chest {
     position: absolute;
@@ -130,7 +130,6 @@
   import prompt from '@system.prompt';
   import ApiService from '../common/js/api-service.js';
   import { CONFIG } from '../common/js/config.js';
-  import authGuard from '../common/js/auth-guard.js';
 
   // --- Start of Promisified Helpers ---
   const _promisifiedStorageGet = (key) => {
@@ -174,38 +173,58 @@
       if (this.isInitialized) return;
       this.isInitialized = true;
 
-      console.log("Main page onInit: Running auth check.");
-      const guardResult = await authGuard.checkNetworkAccess();
-      
-      if (!guardResult || !guardResult.canAccess) {
-        console.log("AuthGuard failed on main page, halting init.");
-        return;
-      }
-      
-      console.log("AuthGuard passed, initializing main page.");
-      await this.loadInitialState(guardResult.userInfo);
+      console.log("Main page onInit: Initializing.");
+      await this.loadInitialState();
       
       this.updateTime();
       setInterval(this.syncClicks.bind(this), CONFIG.APP.SYNC_INTERVAL);
-      setInterval(this.updateTime, 5000);
+      setInterval(this.updateTime, 10000);
       setInterval(this.updateChestTimers.bind(this), 1000);
     },
 
-    async loadInitialState(userInfo) {
+    async loadInitialState() {
+        console.log('[MainPage] --- Loading Initial State ---');
+        
+        // Load pending clicks first
         const pendingClicksData = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.PENDING_CLICKS);
         this.pendingClicks = parseInt(pendingClicksData) || 0;
-        
-        if (userInfo && userInfo.id) {
-            this.petName = userInfo.pet_name || '(无名)';
-            this.clickCount = userInfo.total_clicks || 0;
-            
-            // Await storage updates to ensure consistency
-            await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, this.clickCount.toString());
-            await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(userInfo));
+        console.log(`[MainPage] Loaded pending clicks: ${this.pendingClicks}`);
+
+        // Load user info for pet name
+        const userInfoJSON = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.USER_INFO);
+        let baseClickCount = 0;
+        if (userInfoJSON) {
+            try {
+                const userInfo = JSON.parse(userInfoJSON);
+                if (userInfo && userInfo.id) {
+                    this.petName = userInfo.pet_name || '(无名)';
+                    baseClickCount = userInfo.total_clicks || 0;
+                    console.log(`[MainPage] Loaded user info. PetName: ${this.petName}, Base Clicks from Server: ${baseClickCount}`);
+                } else {
+                  console.error("[MainPage] User info from storage is invalid!");
+                }
+            } catch (e) {
+                console.error("[MainPage] Failed to parse user info from storage:", e);
+            }
         } else {
-            console.error("Main page loaded without valid user info!");
+            console.error("[MainPage] Could not find user info in storage!");
         }
 
+        // Now, determine the most accurate click count
+        const localTotalClicksData = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS);
+        const localTotalClicks = parseInt(localTotalClicksData);
+
+        if (!isNaN(localTotalClicks) && localTotalClicks >= baseClickCount) {
+            // If a valid local total exists and it's greater than the server's, it's more up-to-date.
+            this.clickCount = localTotalClicks;
+            console.log(`[MainPage] Using locally saved total clicks as source of truth: ${this.clickCount}`);
+        } else {
+            // Otherwise, fall back to the server count. This happens on first install or after a data clear.
+            this.clickCount = baseClickCount;
+            console.log(`[MainPage] Falling back to server-provided clicks as source of truth: ${this.clickCount}`);
+        }
+        
+        console.log('[MainPage] --- Initial State Loaded ---');
         await this.loadChestStates();
     },
 
@@ -268,7 +287,10 @@
       try {
         await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, this.pendingClicks.toString());
         await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, this.clickCount.toString());
-      } catch (e) { console.error("Failed to save clicks:", e); }
+        console.log(`[MainPage] Click! New Total: ${this.clickCount}, Pending: ${this.pendingClicks}. Saved to storage.`);
+      } catch (e) { 
+        console.error("[MainPage] Failed to save clicks to storage:", e); 
+      }
 
       const randomImage = Math.random() < 0.5 ? '/common/Ra1.png' : '/common/Ra2.png';
       this.petImage = randomImage;
@@ -304,13 +326,19 @@
     async syncClicks() {
       if (this.pendingClicks === 0) return;
 
-      const guardResult = await authGuard.checkNetworkAccess();
-      if (!guardResult || !guardResult.canAccess) {
-        prompt.showToast({ message: guardResult.message || '需要激活才能同步', duration: 3000 });
+      const userInfoJSON = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.USER_INFO);
+      if (!userInfoJSON) {
+        prompt.showToast({ message: '用户未登录，无法同步', duration: 3000 });
         return;
       }
       
-      const userId = guardResult.userInfo.id;
+      const userInfo = JSON.parse(userInfoJSON);
+      if (!userInfo || !userInfo.id) {
+        prompt.showToast({ message: '用户信息无效，无法同步', duration: 3000 });
+        return;
+      }
+
+      const userId = userInfo.id;
       const clicksToSync = this.pendingClicks;
       const result = await ApiService.syncClicks(userId, clicksToSync);
 

@@ -253,6 +253,207 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                 TOTAL_CLICKS: 'total_clicks'
                             }
                         };
+                    },
+                    "./src/common/js/userService.js" (__unused_rspack_module, exports, __webpack_require__) {
+                        "use strict";
+                        Object.defineProperty(exports, "__esModule", {
+                            value: true
+                        });
+                        exports["default"] = void 0;
+                        var _system = _interopRequireDefault($app_require$1("@app-module/system.device"));
+                        var _system2 = _interopRequireDefault($app_require$1("@app-module/system.storage"));
+                        var _apiService = _interopRequireDefault(__webpack_require__("./src/common/js/api-service.js"));
+                        var _config = __webpack_require__("./src/common/js/config.js");
+                        function _interopRequireDefault(e) {
+                            return e && e.__esModule ? e : {
+                                default: e
+                            };
+                        }
+                        class UserService {
+                            _storageGet(key) {
+                                return new Promise((resolve)=>{
+                                    _system2.default.get({
+                                        key: key,
+                                        success: (data)=>resolve(data),
+                                        fail: ()=>resolve(null)
+                                    });
+                                });
+                            }
+                            _storageSet(key, value) {
+                                return new Promise((resolve, reject)=>{
+                                    _system2.default.set({
+                                        key: key,
+                                        value: value,
+                                        success: resolve,
+                                        fail: (err, code)=>reject(new Error(`Storage.set failed for '${key}': ${err} (${code})`))
+                                    });
+                                });
+                            }
+                            _getRawDeviceId() {
+                                return new Promise((resolve)=>{
+                                    _system.default.getSerial({
+                                        success: async (data)=>{
+                                            let serial = data ? data.serial : null;
+                                            if ('NA' === serial) {
+                                                console.warn("Device serial is 'NA', using a fixed test serial.");
+                                                serial = 'TESTVM-SN-0123456789';
+                                            }
+                                            if (!serial) {
+                                                console.error('Failed to get a valid device serial.');
+                                                resolve(null);
+                                                return;
+                                            }
+                                            try {
+                                                await this._storageSet(_config.CONFIG.STORAGE_KEYS.DEVICE_ID, serial);
+                                                console.log('Saved raw device ID:', serial);
+                                                resolve(serial);
+                                            } catch (e) {
+                                                console.error('Failed to save raw device ID to storage:', e);
+                                                resolve(null);
+                                            }
+                                        },
+                                        fail: (err, code)=>{
+                                            console.error(`Failed to get serial. Code: ${code}, Error: ${err}`);
+                                            resolve(null);
+                                        }
+                                    });
+                                });
+                            }
+                            async _saveUserInfo(userInfo) {
+                                if (!userInfo || !userInfo.id && !userInfo.user_number) throw new Error("User info is invalid, cannot save.");
+                                const userInfoToSave = {
+                                    id: userInfo.id || userInfo.user_number,
+                                    user_number: userInfo.user_number,
+                                    pet_name: userInfo.pet_name,
+                                    total_clicks: userInfo.total_clicks || 0
+                                };
+                                await this._storageSet(_config.CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(userInfoToSave));
+                                console.log("Successfully saved user info to storage:", userInfoToSave);
+                                return userInfoToSave;
+                            }
+                            async ensureUserIsRegistered(forceSync = false) {
+                                console.log('[UserService] Checking for existing user info in storage...');
+                                const existingUserInfoJSON = await this._storageGet(_config.CONFIG.STORAGE_KEYS.USER_INFO);
+                                if (existingUserInfoJSON) {
+                                    try {
+                                        const userInfo = JSON.parse(existingUserInfoJSON);
+                                        if (userInfo && userInfo.id) if (forceSync) {
+                                            console.log('[UserService] Force sync enabled. Attempting to sync latest data from server...');
+                                            try {
+                                                const syncResult = await _apiService.default.syncFromServer(userInfo.id);
+                                                if (syncResult && syncResult.success) {
+                                                    console.log('[UserService] Successfully synced from server.');
+                                                    return await this._saveUserInfo(syncResult.userInfo);
+                                                }
+                                                console.warn('[UserService] Sync from server failed, will use stale local data. Error:', syncResult ? syncResult.error : 'Unknown error');
+                                                return userInfo;
+                                            } catch (syncError) {
+                                                console.error('[UserService] A critical error occurred during server sync:', syncError);
+                                                return userInfo;
+                                            }
+                                        } else {
+                                            console.log('[UserService] User is already registered. Found info:', userInfo);
+                                            return userInfo;
+                                        }
+                                    } catch (e) {
+                                        console.warn('[UserService] User info in storage is malformed. Proceeding with registration.');
+                                    }
+                                }
+                                console.log('[UserService] User not found locally. Starting silent registration process...');
+                                const deviceId = await this._getRawDeviceId();
+                                if (!deviceId) {
+                                    console.error('[UserService] CRITICAL: Cannot proceed with registration: failed to get device ID.');
+                                    return null;
+                                }
+                                console.log(`[UserService] Got device ID: ${deviceId}`);
+                                try {
+                                    console.log('[UserService] Checking device registration with server...');
+                                    const regResult = await _apiService.default.checkDeviceRegistration(deviceId);
+                                    console.log('[UserService] Server registration check response:', JSON.stringify(regResult));
+                                    if (regResult && regResult.is_registered && regResult.userInfo) {
+                                        console.log('[UserService] Device is already registered on server. Restoring user info.');
+                                        return await this._saveUserInfo(regResult.userInfo);
+                                    }
+                                    console.log('[UserService] Device not registered. Attempting to register a new user...');
+                                    const newRegResult = await _apiService.default.registerAndGetUserId(deviceId);
+                                    console.log('[UserService] Server new user registration response:', JSON.stringify(newRegResult));
+                                    if (newRegResult && newRegResult.success && newRegResult.userInfo) {
+                                        console.log('[UserService] Successfully registered new user.');
+                                        return await this._saveUserInfo(newRegResult.userInfo);
+                                    }
+                                    console.error('[UserService] CRITICAL: Failed to register new user.', newRegResult ? newRegResult.message : 'No result from server');
+                                    return null;
+                                } catch (e) {
+                                    console.error('[UserService] CRITICAL: An error occurred during the silent registration API calls:', e);
+                                    return null;
+                                }
+                            }
+                            async triggerClickSync() {
+                                console.log('[UserService] Triggering click sync...');
+                                const userInfoJSON = await this._storageGet(_config.CONFIG.STORAGE_KEYS.USER_INFO);
+                                if (!userInfoJSON) {
+                                    console.warn('[UserService] Sync aborted: User info not found in storage.');
+                                    return false;
+                                }
+                                let userInfo;
+                                try {
+                                    userInfo = JSON.parse(userInfoJSON);
+                                    if (!userInfo || !userInfo.id) {
+                                        console.warn('[UserService] Sync aborted: User ID is invalid.');
+                                        return false;
+                                    }
+                                } catch (e) {
+                                    console.warn('[UserService] Sync aborted: Could not parse user info.');
+                                    return false;
+                                }
+                                const pendingClicksData = await this._storageGet(_config.CONFIG.STORAGE_KEYS.PENDING_CLICKS);
+                                const clicksToSync = parseInt(pendingClicksData);
+                                if (isNaN(clicksToSync) || clicksToSync <= 0) {
+                                    console.log('[UserService] No pending clicks to sync.');
+                                    return true;
+                                }
+                                console.log(`[UserService] Found ${clicksToSync} pending clicks for user ${userInfo.id}. Syncing...`);
+                                const result = await _apiService.default.syncClicks(userInfo.id, clicksToSync);
+                                if (result.success) {
+                                    console.log('[UserService] Sync successful. Resetting pending clicks.');
+                                    await this._storageSet(_config.CONFIG.STORAGE_KEYS.PENDING_CLICKS, '0');
+                                    return true;
+                                }
+                                console.error('[UserService] Sync failed:', result.error);
+                                return false;
+                            }
+                            async forceSyncFromServer() {
+                                console.log('[UserService] Starting force sync from server by running ensureUserIsRegistered...');
+                                try {
+                                    const userInfo = await this.ensureUserIsRegistered(true);
+                                    if (userInfo && userInfo.id) {
+                                        console.log('[UserService] Successfully ensured user is registered. UserInfo:', userInfo);
+                                        await this._storageSet(_config.CONFIG.STORAGE_KEYS.TOTAL_CLICKS, (userInfo.total_clicks || 0).toString());
+                                        await this._storageSet(_config.CONFIG.STORAGE_KEYS.PENDING_CLICKS, '0');
+                                        console.log('[UserService] Force sync complete. Local storage overwritten.');
+                                        return {
+                                            success: true,
+                                            message: '同步成功！'
+                                        };
+                                    }
+                                    {
+                                        const errorMsg = '无法从服务器同步或创建账户';
+                                        console.error(`[UserService] ${errorMsg}`);
+                                        return {
+                                            success: false,
+                                            message: errorMsg
+                                        };
+                                    }
+                                } catch (e) {
+                                    console.error('[UserService] An error occurred during force sync call:', e);
+                                    return {
+                                        success: false,
+                                        message: '同步失败，发生网络错误'
+                                    };
+                                }
+                            }
+                        }
+                        var _default = exports["default"] = new UserService();
                     }
                 };
                 var __webpack_module_cache__ = {};
@@ -352,18 +553,6 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                             [
                                 [
                                     0,
-                                    "page-header-back-arrow"
-                                ]
-                            ],
-                            {
-                                color: "#ffffff",
-                                fontSize: "50px"
-                            }
-                        ],
-                        [
-                            [
-                                [
-                                    0,
                                     "page-header-title"
                                 ]
                             ],
@@ -402,125 +591,41 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                             [
                                 [
                                     0,
-                                    "leaderboard-list"
-                                ]
-                            ],
-                            {
-                                width: "90%",
-                                flexGrow: 1
-                            }
-                        ],
-                        [
-                            [
-                                [
-                                    0,
-                                    "list-item"
-                                ]
-                            ],
-                            {
-                                width: "100%",
-                                height: "120px",
-                                backgroundColor: "#1a1a1a",
-                                borderRadius: "15px",
-                                marginBottom: "10px",
-                                paddingTop: "0",
-                                paddingRight: "20px",
-                                paddingBottom: "0",
-                                paddingLeft: "20px",
-                                justifyContent: "flex-start",
-                                alignItems: "center"
-                            }
-                        ],
-                        [
-                            [
-                                [
-                                    0,
-                                    "rank-info"
-                                ]
-                            ],
-                            {
-                                flexDirection: "row",
-                                alignItems: "center"
-                            }
-                        ],
-                        [
-                            [
-                                [
-                                    0,
-                                    "rank-number"
-                                ]
-                            ],
-                            {
-                                color: "#aaaaaa",
-                                fontSize: "30px",
-                                marginRight: "20px"
-                            }
-                        ],
-                        [
-                            [
-                                [
-                                    0,
-                                    "name-and-score"
+                                    "menu-list"
                                 ]
                             ],
                             {
                                 flexDirection: "column",
-                                alignItems: "flex-start"
+                                width: "90%"
                             }
                         ],
                         [
                             [
                                 [
                                     0,
-                                    "rank-name"
+                                    "menu-item"
+                                ]
+                            ],
+                            {
+                                width: "100%",
+                                height: "90px",
+                                borderRadius: "20px",
+                                backgroundColor: "#1a1a1a",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                marginBottom: "20px"
+                            }
+                        ],
+                        [
+                            [
+                                [
+                                    0,
+                                    "menu-text"
                                 ]
                             ],
                             {
                                 color: "#ffffff",
-                                fontSize: "30px",
-                                marginBottom: "5px"
-                            }
-                        ],
-                        [
-                            [
-                                [
-                                    0,
-                                    "rank-score"
-                                ]
-                            ],
-                            {
-                                color: "#aaaaaa",
-                                fontSize: "24px"
-                            }
-                        ],
-                        [
-                            [
-                                [
-                                    0,
-                                    "status-container"
-                                ]
-                            ],
-                            {
-                                flex: 1,
-                                justifyContent: "center",
-                                alignItems: "center",
-                                paddingTop: "20px",
-                                paddingRight: "20px",
-                                paddingBottom: "20px",
-                                paddingLeft: "20px"
-                            }
-                        ],
-                        [
-                            [
-                                [
-                                    0,
-                                    "status-text"
-                                ]
-                            ],
-                            {
-                                color: "#aaaaaa",
-                                fontSize: "28px",
-                                textAlign: "center"
+                                fontSize: "32px"
                             }
                         ]
                     ];
@@ -531,7 +636,8 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                         });
                         exports.default = void 0;
                         var _system = _interopRequireDefault($app_require$1("@app-module/system.router"));
-                        var _apiService = _interopRequireDefault(__webpack_require__("./src/common/js/api-service.js"));
+                        var _system2 = _interopRequireDefault($app_require$1("@app-module/system.prompt"));
+                        var _userService = _interopRequireDefault(__webpack_require__("./src/common/js/userService.js"));
                         function _interopRequireDefault(e) {
                             return e && e.__esModule ? e : {
                                 default: e
@@ -539,14 +645,11 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                         }
                         var _default = exports.default = {
                             data: {
-                                time: '00:00',
-                                rankings: [],
-                                statusMessage: '正在加载...'
+                                time: '00:00'
                             },
                             onInit () {
                                 this.updateTime();
                                 setInterval(this.updateTime, 10000);
-                                this.fetchRankings();
                             },
                             updateTime () {
                                 const now = new Date();
@@ -554,24 +657,43 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                 const minutes = now.getMinutes().toString().padStart(2, '0');
                                 this.time = `${hours}:${minutes}`;
                             },
-                            async fetchRankings () {
-                                console.log('[Leaderboard] Fetching rankings...');
-                                const result = await _apiService.default.getRankings();
-                                console.log('[Leaderboard] API Response:', JSON.stringify(result));
-                                if (result.success && result.rankings.length > 0) {
-                                    this.rankings = result.rankings;
-                                    this.statusMessage = '';
-                                    console.log(`[Leaderboard] Successfully loaded ${result.rankings.length} ranking entries.`);
-                                } else if (result.success && 0 === result.rankings.length) {
-                                    this.statusMessage = '排行榜上还没有人，快去点击吧！';
-                                    console.log('[Leaderboard] API returned success with 0 rankings.');
-                                } else {
-                                    console.error("[Leaderboard] Failed to fetch rankings:", result.error);
-                                    this.statusMessage = '无法加载排行榜，请稍后重试。';
-                                }
-                            },
                             goBack () {
                                 _system.default.back();
+                            },
+                            async syncCloudToLocal () {
+                                _system2.default.showToast({
+                                    message: '正在从云端同步...'
+                                });
+                                const result = await _userService.default.forceSyncFromServer();
+                                _system2.default.showToast({
+                                    message: result.message
+                                });
+                                if (result.success) setTimeout(()=>{
+                                    this.goBack();
+                                }, 1000);
+                            },
+                            async syncLocalToCloud () {
+                                _system2.default.showToast({
+                                    message: '正在上传本地进度...'
+                                });
+                                const uploadSuccess = await _userService.default.triggerClickSync();
+                                if (uploadSuccess) {
+                                    _system2.default.showToast({
+                                        message: '上传成功！正在刷新数据...'
+                                    });
+                                    const refreshResult = await _userService.default.forceSyncFromServer();
+                                    if (refreshResult.success) _system2.default.showToast({
+                                        message: '数据刷新成功！'
+                                    });
+                                    else _system2.default.showToast({
+                                        message: '刷新失败，请稍后重试'
+                                    });
+                                } else _system2.default.showToast({
+                                    message: '上传失败或无待同步数据'
+                                });
+                                setTimeout(()=>{
+                                    this.goBack();
+                                }, 1000);
                             }
                         };
                         const moduleOwn = exports.default || module.exports;
@@ -662,7 +784,7 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                                 classList: [
                                                     "page-header-title"
                                                 ],
-                                                value: "排行榜"
+                                                value: "同步选项"
                                             }
                                         }, [])
                                     ])
@@ -676,131 +798,61 @@ export default function(global, globalThis, window, $app_exports$, $app_evaluate
                                     ]
                                 }
                             }, [
-                                aiot.__ci__({
+                                aiot.__ce__("div", {
                                     __vm__: _vm_,
                                     __opts__: {
-                                        shown: function() {
-                                            return _vm_.rankings.length > 0;
-                                        }
+                                        classList: [
+                                            "menu-list"
+                                        ]
                                     }
-                                }, function() {
-                                    return [
-                                        aiot.__ce__("list", {
+                                }, [
+                                    aiot.__ce__("div", {
+                                        __vm__: _vm_,
+                                        __opts__: {
+                                            classList: [
+                                                "menu-item"
+                                            ],
+                                            events: {
+                                                click: function(evt) {
+                                                    return _vm_.syncCloudToLocal(evt);
+                                                }
+                                            }
+                                        }
+                                    }, [
+                                        aiot.__ce__("text", {
                                             __vm__: _vm_,
                                             __opts__: {
                                                 classList: [
-                                                    "leaderboard-list"
-                                                ]
+                                                    "menu-text"
+                                                ],
+                                                value: "从云端同步至本地"
                                             }
-                                        }, [
-                                            aiot.__cf__({
-                                                __vm__: _vm_,
-                                                __opts__: {
-                                                    exp: function() {
-                                                        return _vm_.rankings;
-                                                    },
-                                                    key: "$idx",
-                                                    value: "$item"
+                                        }, [])
+                                    ]),
+                                    aiot.__ce__("div", {
+                                        __vm__: _vm_,
+                                        __opts__: {
+                                            classList: [
+                                                "menu-item"
+                                            ],
+                                            events: {
+                                                click: function(evt) {
+                                                    return _vm_.syncLocalToCloud(evt);
                                                 }
-                                            }, function($idx, $item) {
-                                                return [
-                                                    aiot.__ce__("list-item", {
-                                                        __vm__: _vm_,
-                                                        __opts__: {
-                                                            classList: [
-                                                                "list-item"
-                                                            ],
-                                                            type: "default"
-                                                        }
-                                                    }, [
-                                                        aiot.__ce__("div", {
-                                                            __vm__: _vm_,
-                                                            __opts__: {
-                                                                classList: [
-                                                                    "rank-info"
-                                                                ]
-                                                            }
-                                                        }, [
-                                                            aiot.__ce__("text", {
-                                                                __vm__: _vm_,
-                                                                __opts__: {
-                                                                    classList: [
-                                                                        "rank-number"
-                                                                    ],
-                                                                    value: function() {
-                                                                        return $idx + 1;
-                                                                    }
-                                                                }
-                                                            }, []),
-                                                            aiot.__ce__("div", {
-                                                                __vm__: _vm_,
-                                                                __opts__: {
-                                                                    classList: [
-                                                                        "name-and-score"
-                                                                    ]
-                                                                }
-                                                            }, [
-                                                                aiot.__ce__("text", {
-                                                                    __vm__: _vm_,
-                                                                    __opts__: {
-                                                                        classList: [
-                                                                            "rank-name"
-                                                                        ],
-                                                                        value: function() {
-                                                                            return $item.pet_name;
-                                                                        }
-                                                                    }
-                                                                }, []),
-                                                                aiot.__ce__("text", {
-                                                                    __vm__: _vm_,
-                                                                    __opts__: {
-                                                                        classList: [
-                                                                            "rank-score"
-                                                                        ],
-                                                                        value: function() {
-                                                                            return $item.clicks + " 次点击";
-                                                                        }
-                                                                    }
-                                                                }, [])
-                                                            ])
-                                                        ])
-                                                    ])
-                                                ];
-                                            })
-                                        ])
-                                    ];
-                                }),
-                                aiot.__ci__({
-                                    __vm__: _vm_,
-                                    __opts__: {
-                                        shown: function() {
-                                            return 0 === _vm_.rankings.length && _vm_.statusMessage;
+                                            }
                                         }
-                                    }
-                                }, function() {
-                                    return [
-                                        aiot.__ce__("div", {
+                                    }, [
+                                        aiot.__ce__("text", {
                                             __vm__: _vm_,
                                             __opts__: {
                                                 classList: [
-                                                    "status-container"
-                                                ]
+                                                    "menu-text"
+                                                ],
+                                                value: "从本地同步至云端"
                                             }
-                                        }, [
-                                            aiot.__ce__("text", {
-                                                __vm__: _vm_,
-                                                __opts__: {
-                                                    classList: [
-                                                        "status-text"
-                                                    ],
-                                                    value: function() {
-                                                        return _vm_.statusMessage;
-                                                    }
-                                                }
-                                            }, [])
-                                        ])
-                                    ];
-                                })
+                                        }, [])
+                                    ])
+                                ])
                             ])
                         ]);
                     };
