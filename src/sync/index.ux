@@ -46,7 +46,6 @@
       time: '00:00'
     },
     onInit() {
-      console.log('[SyncPage] onInit: Page is loading.');
       this.updateTime();
       setInterval(this.updateTime, 10000);
     },
@@ -60,7 +59,6 @@
       router.back();
     },
     async syncCloudToLocal() {
-      console.log('[SyncPage] syncCloudToLocal called.');
       prompt.showToast({ message: '正在从云端同步...' });
       const result = await UserService.forceSyncFromServer();
       prompt.showToast({ message: result.message });
@@ -70,7 +68,6 @@
       }
     },
     async syncLocalToCloud() {
-      console.log('[SyncPage] syncLocalToCloud called.');
       prompt.showToast({ message: '正在上传本地进度...' });
       const uploadSuccess = await UserService.triggerClickSync();
 

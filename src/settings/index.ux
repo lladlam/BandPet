@@ -183,11 +183,9 @@
       this.time = `${hours}:${minutes}`;
     },
     async handleCloudSync() {
-      console.log('[SettingsPage] handleCloudSync called. Navigating to sync page...');
       router.push({
         uri: 'sync'
       });
-      console.log('[SettingsPage] router.push for sync page has been called.');
     },
     goBack() {
       router.back();
