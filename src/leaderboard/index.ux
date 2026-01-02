@@ -1,31 +1,36 @@
 <template>
-  <div class="page-container">
-    <div class="page-header-container">
-      <div class="page-header">
-        <image src="../common/back.png" class="page-header-back-button" onclick="goBack"></image>
-        <div class="header-title-time">
-          <text class="page-time-display">{{ time }}</text>
-          <text class="page-header-title">排行榜</text>
+  <stack class="page-container">
+    <!-- Main content container -->
+    <div style="width: 100%; height: 100%; flex-direction: column; align-items: center;">
+      <div class="page-header-container">
+        <div class="page-header">
+          <!-- Back button moved to top layer of stack -->
+          <div class="header-title-time">
+            <text class="page-time-display">{{ time }}</text>
+            <text class="page-header-title">排行榜</text>
+          </div>
+        </div>
+      </div>
+      <div class="page-content">
+        <list class="leaderboard-list" if="{{ rankings.length > 0 }}">
+          <list-item for="{{rankings}}" class="list-item" type="default">
+            <div class="rank-info">
+              <text class="rank-number">{{$idx + 1}}</text>
+              <div class="name-and-score">
+                <text class="rank-name">{{$item.pet_name}}</text>
+                <text class="rank-score">{{$item.clicks}} 次点击</text>
+              </div>
+            </div>
+          </list-item>
+        </list>
+        <div class="status-container" if="{{ rankings.length === 0 && statusMessage }}">
+          <text class="status-text">{{ statusMessage }}</text>
         </div>
       </div>
     </div>
-    <div class="page-content">
-      <list class="leaderboard-list" if="{{ rankings.length > 0 }}">
-        <list-item for="{{rankings}}" class="list-item" type="default">
-          <div class="rank-info">
-            <text class="rank-number">{{$idx + 1}}</text>
-            <div class="name-and-score">
-              <text class="rank-name">{{$item.pet_name}}</text>
-              <text class="rank-score">{{$item.clicks}} 次点击</text>
-            </div>
-          </div>
-        </list-item>
-      </list>
-      <div class="status-container" if="{{ rankings.length === 0 && statusMessage }}">
-        <text class="status-text">{{ statusMessage }}</text>
-      </div>
-    </div>
-  </div>
+    <!-- Back Button on top layer for guaranteed clickability -->
+    <image src="../common/back.png" class="page-header-back-button" onclick="goBack" style="top: 5px;"></image>
+  </stack>
 </template>
 
 <style>
@@ -58,7 +63,7 @@
     width: 80px;
     height: 80px;
     position: absolute;
-    left: 20px;
+    left: 0px;
   }
   .page-header-back-arrow {
     color: #FFFFFF;
@@ -75,8 +80,9 @@
   .page-content {
     flex-direction: column;
     width: 100%;
-    height: 100%;
+    flex: 1; /* Take up remaining vertical space */
     align-items: center;
+    overflow-y: scroll; /* Allow content to scroll */
   }
   .leaderboard-list {
     width: 90%;

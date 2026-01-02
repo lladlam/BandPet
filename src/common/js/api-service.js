@@ -41,8 +41,9 @@ class ApiService {
           }
         },
         fail: (error, code) => {
-          console.error(`Request Failed: ${code}`, error);
-          reject(new Error(`Request failed: ${error.data}`))
+          // DETAILED LOGGING FOR NETWORK FAILURES
+          console.error(`[ApiService] Request Failed. Code: ${code}, Error: ${JSON.stringify(error)}`);
+          reject(new Error(`Request failed: ${error.data || 'Connection is invalid'}`))
         }
       })
     })
@@ -156,6 +157,59 @@ class ApiService {
       console.error('注册或获取用户ID时发生网络错误:', error);
       // Return a compatible error object
       return { success: false, message: error.message };
+    }
+  }
+
+  // 获取公告列表
+  async getAnnouncements(limit = 10) {
+    try {
+      const result = await this.request('get_announcements', {
+        limit: limit
+      });
+      console.log('Original announcement result from server:', JSON.stringify(result));
+      
+      return {
+        success: result.success || false,
+        announcements: result.announcements || [],
+        count: result.count || 0,
+        timestamp: result.timestamp,
+        error: result.error
+      };
+    } catch (error) {
+      console.error('获取公告失败:', error);
+      return {
+        success: false,
+        error: error.message,
+        announcements: [],
+        count: 0
+      };
+    }
+  }
+
+  // 检查应用更新
+  async checkAppUpdate(currentVersionCode) {
+    try {
+      const result = await this.request('check_update', {
+        current_version_code: currentVersionCode
+      });
+      
+      return {
+        success: result.success || false,
+        hasUpdate: result.has_update || false,
+        updateInfo: result.update_info || null,
+        isForceUpdate: result.is_force_update || false,
+        currentVersionCode: result.current_version_code || currentVersionCode,
+        latestVersionCode: result.latest_version_code || currentVersionCode,
+        error: result.error
+      };
+    } catch (error) {
+      console.error('检查更新失败:', error);
+      return {
+        success: false,
+        error: error.message,
+        hasUpdate: false,
+        isForceUpdate: false
+      };
     }
   }
 }

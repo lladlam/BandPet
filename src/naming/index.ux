@@ -5,7 +5,6 @@
 
     <!-- Layer 1: Main Content -->
     <div class="content-wrapper">
-      <image src="../common/ShowKeyBoard.png" class="close-keyboard-button" show="{{showKeyboard}}" onclick="toggleKeyboard(false)"></image>
 
       <div class="page-header-container">
         <div class="page-header">
@@ -34,6 +33,9 @@
 
     <!-- Layer 2: Keyboard -->
     <InputMethod hide="{{!showKeyboard}}" keyboardtype="QWERTY" screentype="rect" oncomplete="handleKeyboardComplete" ondelete="handleKeyboardDelete"></InputMethod>
+
+    <!-- Layer 3: Close Button (on top of everything) -->
+    <image src="../common/ShowKeyBoard.png" class="close-keyboard-button" show="{{showKeyboard}}" onclick="toggleKeyboard(false)"></image>
   </stack>
 </template>
 
@@ -81,7 +83,7 @@
     width: 80px;
     height: 80px;
     position: absolute;
-    left: 20px;
+    left: 0px;
   }
   .page-header-title {
     color: #FFFFFF;
@@ -94,8 +96,9 @@
   .page-content {
     flex-direction: column;
     width: 100%;
-    height: 100%;
+    flex: 1; /* Take up remaining vertical space */
     align-items: center;
+    overflow-y: scroll; /* Allow content to scroll */
   }
   .content-container { flex-direction: column; align-items: center; }
   .current-name-section { flex-direction: column; align-items: center; margin-bottom: 30px; }
@@ -154,12 +157,12 @@
           const userInfoJSON = await storage.get({ key: CONFIG.STORAGE_KEYS.USER_INFO });
           if (userInfoJSON) {
             const userInfo = JSON.parse(userInfoJSON);
-            this.currentPetName = userInfo.pet_name || '(无名)';
+            this.currentPetName = userInfo.pet_name || '未命名';
           } else {
-            this.currentPetName = '(无名)';
+            this.currentPetName = '未命名';
           }
         } catch (e) {
-          this.currentPetName = '(无名)';
+          this.currentPetName = '未命名';
         }
       },
       updateTime() {

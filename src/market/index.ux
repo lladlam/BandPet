@@ -10,7 +10,7 @@
       </div>
     </div>
     <div class="page-content">
-      <text class="WIP">此功能正在开发中</text>
+      <text class="WIP">你的开发者正在抠图</text>
     </div>
   </div>
 </template>
@@ -45,7 +45,7 @@
     width: 80px;
     height: 80px;
     position: absolute;
-    left: 20px;
+    left: 0px;
   }
   .page-header-title {
     color: #FFFFFF;
@@ -58,8 +58,9 @@
   .page-content {
     flex-direction: column;
     width: 100%;
-    height: 100%;
+    flex: 1; /* Take up remaining vertical space */
     align-items: center;
+    overflow-y: scroll; /* Allow content to scroll */
   }
   .WIP {
       margin-top: 100px;

@@ -27,10 +27,16 @@
   .page-header-container { width: 100%; margin-bottom: 20px; }
   .page-time-display { color: #FFFFFF; font-size: 24px; margin-bottom: 2px; }
   .page-header { width: 100%; height: 90px; padding: 0 20px; flex-direction: row; align-items: center; justify-content: center; position: relative; }
-  .page-header-back-button { width: 80px; height: 80px; position: absolute; left: 20px; }
+  .page-header-back-button { width: 80px; height: 80px; position: absolute; left: 0px; }
   .page-header-title { color: #FFFFFF; font-size: 32px; }
   .header-title-time { flex-direction: column; align-items: center; }
-  .page-content { flex-direction: column; width: 100%; height: 100%; align-items: center; }
+    .page-content {
+      flex-direction: column;
+      width: 100%;
+      flex: 1; /* Take up remaining vertical space */
+      align-items: center;
+      overflow-y: scroll; /* Allow content to scroll */
+    }
   .menu-list { flex-direction: column; width: 90%; }
   .menu-item { width: 100%; height: 90px; border-radius: 20px; background-color: #1A1A1A; justify-content: center; align-items: center; margin-bottom: 20px; }
   .menu-text { color: #FFFFFF; font-size: 32px; }

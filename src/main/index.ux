@@ -1,22 +1,27 @@
 <template>
   <div class="container">
     <text class="time">{{ time }}</text>
-    <div class="left-chest" onclick="claimChest(0)">
-      <text class="chest-label">宝箱</text>
-      <text show="{{!chests[0].claimed}}" class="chest-cost">花费: 1000</text>
-      <text show="{{chests[0].claimed}}" class="chest-timer">{{ chests[0].timerDisplay }}</text>
+    
+    <div class="chest-row">
+      <div class="chest" onclick="claimChest(0, $event)">
+        <text class="chest-label">宝箱</text>
+        <text show="{{!chests[0].claimed}}" class="chest-cost">花费: 1000</text>
+        <text show="{{chests[0].claimed}}" class="chest-timer">{{ chests[0].timerDisplay }}</text>
+      </div>
+      <div class="chest" onclick="claimChest(1, $event)">
+        <text class="chest-label">宝箱</text>
+        <text show="{{!chests[1].claimed}}" class="chest-cost">花费: 1000</text>
+        <text show="{{chests[1].claimed}}" class="chest-timer">{{ chests[1].timerDisplay }}</text>
+      </div>
     </div>
-    <div class="right-chest" onclick="claimChest(1)">
-      <text class="chest-label">宝箱</text>
-      <text show="{{!chests[1].claimed}}" class="chest-cost">花费: 1000</text>
-      <text show="{{chests[1].claimed}}" class="chest-timer">{{ chests[1].timerDisplay }}</text>
-    </div>
-    <div class="pet-container" onclick="incrementClick">
+
+    <div class="pet-container" onclick="incrementClick($event)">
       <image class="pet-image" src="{{ petImage }}"></image>
       <text class="pet-name">{{ petName }}</text>
     </div>
+    
     <div class="bottom-bar">
-<image src="../common/more.png" class="more-button" onclick="openMore"></image>
+      <image src="../common/more.png" class="more-button" onclick="openMore($event)"></image>
       <div class="click-counter">
         <text class="click-counter-text">{{ clickCount }}</text>
       </div>
@@ -26,74 +31,66 @@
 
 <style>
   .container {
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    width: 100%;
+    height: 100%;
     background-color: #000000;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0; /* Reduced padding */
+    overflow: hidden; /* Disable scrolling */
   }
   .time {
-    position: absolute;
-    top: 14px;
     color: #FFFFFF;
-    font-size: 24px;
+    font-size: 24px; /* Restored font size */
+    text-align: center;
+    width: 100%;
   }
-  .left-chest, .right-chest {
-    position: absolute;
-    width: 105px;
-    height: 105px;
-    background-color: #DAA520; /* GoldenRod */
+  .chest-row {
+    width: 100%;
+    justify-content: space-around;
+    padding: 0 20px;
+  }
+  .chest {
+    width: 100px; /* Reduced size */
+    height: 100px; /* Reduced size */
+    background-color: #DAA520;
     border-radius: 10.5px;
     justify-content: center;
     align-items: center;
     flex-direction: column;
     padding: 7px;
   }
-  .left-chest {
-    top: 70px;
-    left: 14px;
-  }
-  .right-chest {
-    top: 70px;
-    right: 14px;
-  }
-  .chest-progress {
-    color: #FFF;
-    font-size: 24px;
-    margin-bottom: 5px;
-  }
   .chest-label {
-    font-size: 28px;
+    font-size: 26px; /* Slightly smaller to fit */
     color: #000000;
-    margin-bottom: 7px;
+    margin-bottom: 5px;
   }
   .chest-cost {
     color: #000000;
-    font-size: 16.8px;
+    font-size: 15px;
   }
   .chest-timer {
     color: #000000;
-    font-size: 16.8px;
+    font-size: 15px;
   }
   .pet-container {
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    width: 210px;
-    height: 210px;
+    margin-top: 10px; /* Adjust margin */
   }
   .pet-image {
-    width: 210px; /* 140 * 1.5 */
-    height: 210px; /* 140 * 1.5 */
+    width: 200px; /* Slightly smaller to compensate space */
+    height: 200px;
     object-fit: contain;
   }
   .pet-name {
     color: #888888;
     font-size: 28px;
-    margin-top: 20px; /* Increased from 10px to 20px */
+    margin-top: 15px;
   }
   .bottom-bar {
-    position: absolute;
-    bottom: 21px;
     width: 100%;
     justify-content: space-around;
     align-items: center;
@@ -101,14 +98,6 @@
   .more-button {
     width: 56px;
     height: 56px;
-    border-radius: 28px;
-    background-color: #1A1A1A;
-    justify-content: center;
-    align-items: center;
-  }
-  .more-button-text {
-    color: #FFFFFF;
-    font-size: 35px;
   }
   .click-counter {
     width: 140px;
@@ -128,120 +117,77 @@
   import router from '@system.router';
   import storage from '@system.storage';
   import prompt from '@system.prompt';
-  import ApiService from '../common/js/api-service.js';
+  import UserService from '../common/js/userService.js';
   import { CONFIG } from '../common/js/config.js';
 
-  // --- Start of Promisified Helpers ---
-  const _promisifiedStorageGet = (key) => {
-    return new Promise((resolve) => {
-      storage.get({
-        key: key,
-        success: (data) => resolve(data),
-        fail: () => resolve(null)
-      });
-    });
-  };
+  const _promisifiedStorageGet = (key) => new Promise((resolve) => {
+    storage.get({ key, success: (data) => resolve(data), fail: () => resolve(null) });
+  });
 
-  const _promisifiedStorageSet = (key, value) => {
-    return new Promise((resolve, reject) => {
-      storage.set({
-        key: key,
-        value: value,
-        success: resolve,
-        fail: (err, code) => reject(new Error(`Storage.set failed for key '${key}' with code ${code}: ${err}`))
-      });
-    });
-  };
-  // --- End of Promisified Helpers ---
+  const _promisifiedStorageSet = (key, value) => new Promise((resolve, reject) => {
+    storage.set({ key, value, success: resolve, fail: (err, code) => reject(new Error(`Storage.set failed for key '${key}' with code ${code}: ${err}`)) });
+  });
 
   export default {
     data: {
       time: '00:00',
-      petName: '(无名)',
+      petName: '未命名',
       clickCount: 0,
-      pendingClicks: 0,
       petImage: '/common/Ra0.png',
       chests: [
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' },
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' }
       ],
-      // Add a simple flag to prevent multiple initializations
-      isInitialized: false 
     },
 
-    async onInit() {
-      if (this.isInitialized) return;
-      this.isInitialized = true;
-
-      console.log("Main page onInit: Initializing.");
-      await this.loadInitialState();
-      
+    onInit() {
+      this.loadInitialState();
       this.updateTime();
-      setInterval(this.syncClicks.bind(this), CONFIG.APP.SYNC_INTERVAL);
+      setInterval(() => UserService.triggerClickSync(), CONFIG.APP.SYNC_INTERVAL);
       setInterval(this.updateTime, 10000);
       setInterval(this.updateChestTimers.bind(this), 1000);
     },
+    
+    async onShow() {
+        // await this.loadInitialState();
+    },
 
     async loadInitialState() {
-        console.log('[MainPage] --- Loading Initial State ---');
+        const userInfo = await UserService.ensureUserIsRegistered();
+        let serverClicks = 0;
         
-        // Load pending clicks first
-        const pendingClicksData = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.PENDING_CLICKS);
-        this.pendingClicks = parseInt(pendingClicksData) || 0;
-        console.log(`[MainPage] Loaded pending clicks: ${this.pendingClicks}`);
-
-        // Load user info for pet name
-        const userInfoJSON = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.USER_INFO);
-        let baseClickCount = 0;
-        if (userInfoJSON) {
-            try {
-                const userInfo = JSON.parse(userInfoJSON);
-                if (userInfo && userInfo.id) {
-                    this.petName = userInfo.pet_name || '(无名)';
-                    baseClickCount = userInfo.total_clicks || 0;
-                    console.log(`[MainPage] Loaded user info. PetName: ${this.petName}, Base Clicks from Server: ${baseClickCount}`);
-                } else {
-                  console.error("[MainPage] User info from storage is invalid!");
-                }
-            } catch (e) {
-                console.error("[MainPage] Failed to parse user info from storage:", e);
-            }
-        } else {
-            console.error("[MainPage] Could not find user info in storage!");
+        if (userInfo && userInfo.id) {
+            this.petName = userInfo.pet_name || '未命名';
+            serverClicks = userInfo.total_clicks || 0;
         }
 
-        // Now, determine the most accurate click count
-        const localTotalClicksData = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS);
-        const localTotalClicks = parseInt(localTotalClicksData);
+        // Always add pending clicks from local storage
+        const pendingClicksStr = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.PENDING_CLICKS);
+        const pendingClicks = parseInt(pendingClicksStr) || 0;
 
-        if (!isNaN(localTotalClicks) && localTotalClicks >= baseClickCount) {
-            // If a valid local total exists and it's greater than the server's, it's more up-to-date.
-            this.clickCount = localTotalClicks;
-            console.log(`[MainPage] Using locally saved total clicks as source of truth: ${this.clickCount}`);
-        } else {
-            // Otherwise, fall back to the server count. This happens on first install or after a data clear.
-            this.clickCount = baseClickCount;
-            console.log(`[MainPage] Falling back to server-provided clicks as source of truth: ${this.clickCount}`);
-        }
+        this.clickCount = serverClicks + pendingClicks;
         
-        console.log('[MainPage] --- Initial State Loaded ---');
+        console.log(`[State] Loaded state: Server clicks=${serverClicks}, Pending clicks=${pendingClicks}, Total UI clicks=${this.clickCount}`);
+        
         await this.loadChestStates();
     },
 
     async loadChestStates() {
       const chestData = await _promisifiedStorageGet('chestStates');
       if (chestData) {
-        const loadedChests = JSON.parse(chestData);
-        this.chests = loadedChests.map(chest => {
-          if (chest.refreshTimestamp > 0 && chest.claimed) {
-            const remainingTime = Math.max(0, chest.refreshTimestamp - Date.now());
-            if (remainingTime <= 0) {
-              chest.claimed = false;
-              chest.refreshTimestamp = 0;
-            }
-          }
-          return chest;
-        });
+        try {
+            const loadedChests = JSON.parse(chestData);
+            this.chests = loadedChests.map(chest => {
+              if (chest.refreshTimestamp > 0 && chest.claimed) {
+                const remainingTime = Math.max(0, chest.refreshTimestamp - Date.now());
+                if (remainingTime <= 0) {
+                  chest.claimed = false;
+                  chest.refreshTimestamp = 0;
+                }
+              }
+              return chest;
+            });
+        } catch(e) { console.error("Failed to parse chest states from storage", e); }
       }
     },
 
@@ -269,9 +215,7 @@
           }
         }
       });
-      if (needsSave) {
-        this.saveChestStates();
-      }
+      if (needsSave) this.saveChestStates();
     },
 
     formatTime(seconds) {
@@ -280,79 +224,36 @@
       return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     },
 
-    async incrementClick() {
-      this.clickCount++;
-      this.pendingClicks++;
-
-      try {
-        await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, this.pendingClicks.toString());
-        await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, this.clickCount.toString());
-        console.log(`[MainPage] Click! New Total: ${this.clickCount}, Pending: ${this.pendingClicks}. Saved to storage.`);
-      } catch (e) { 
-        console.error("[MainPage] Failed to save clicks to storage:", e); 
-      }
-
-      const randomImage = Math.random() < 0.5 ? '/common/Ra1.png' : '/common/Ra2.png';
-      this.petImage = randomImage;
-
-      setTimeout(() => { this.petImage = '/common/Ra0.png'; }, 200);
+    async incrementClick(e) {
+        // This is the general click handler for the background/pet
+        this.clickCount++;
+        await UserService.updatePendingClicks(1);
+        this.petImage = Math.random() < 0.5 ? '/common/Ra1.png' : '/common/Ra2.png';
+        setTimeout(() => { this.petImage = '/common/Ra0.png'; }, 200);
     },
 
-    async claimChest(index) {
+    async claimChest(index, e) {
       const chest = this.chests[index];
       if (chest.claimed) {
-        console.log('Chest is on cooldown.');
+        prompt.showToast({ message: '宝箱正在冷却中' });
         return;
       }
       if (this.clickCount >= 1000) {
         this.clickCount -= 1000;
+        await UserService.updatePendingClicks(-1000);
         const reward = Math.floor(Math.random() * 500) + 100;
         this.clickCount += reward;
-        
-        console.log(`Chest ${index} claimed! Rewarded ${reward} clicks.`);
+        await UserService.updatePendingClicks(reward);
+        prompt.showToast({ message: `获得 ${reward} 点击!` });
         this.chests[index].claimed = true;
         this.chests[index].refreshTimestamp = Date.now() + (30 * 60 * 1000);
-        
-        try {
-          await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, this.clickCount.toString());
-          await this.saveChestStates();
-        } catch(e) { console.error("Failed to save chest state:", e); }
-
+        await this.saveChestStates();
       } else {
-        console.log('Not enough clicks to open chest.');
+        prompt.showToast({ message: '点击次数不足' });
       }
     },
 
-    async syncClicks() {
-      if (this.pendingClicks === 0) return;
-
-      const userInfoJSON = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.USER_INFO);
-      if (!userInfoJSON) {
-        prompt.showToast({ message: '用户未登录，无法同步', duration: 3000 });
-        return;
-      }
-      
-      const userInfo = JSON.parse(userInfoJSON);
-      if (!userInfo || !userInfo.id) {
-        prompt.showToast({ message: '用户信息无效，无法同步', duration: 3000 });
-        return;
-      }
-
-      const userId = userInfo.id;
-      const clicksToSync = this.pendingClicks;
-      const result = await ApiService.syncClicks(userId, clicksToSync);
-
-      if (result.success) {
-        this.pendingClicks -= clicksToSync;
-        if (this.pendingClicks < 0) this.pendingClicks = 0;
-        await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, this.pendingClicks.toString());
-        prompt.showToast({ message: '点击次数已同步' });
-      } else {
-        prompt.showToast({ message: '同步失败，请稍后重试' });
-      }
-    },
-
-    openMore() {
+    openMore(e) {
       router.push({ uri: 'more' });
     }
   }

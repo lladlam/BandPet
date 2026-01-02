@@ -1,8 +1,8 @@
 {
   "package": "com.lladlam.bandpet.9pro",
   "name": "BandPet",
-  "versionName": "0.3.6 Alpha",
-  "versionCode": 10,
+  "versionName": "0.4.1",
+  "versionCode": 41,
   "minPlatformVersion": 1000,
   "icon": "/common/icon.png",
   "deviceTypeList": [
@@ -22,17 +22,19 @@
       "name": "system.storage"
     },
     {
-      "name": "hapjs.permission.DEVICE_INFO"
-    },
-    {
-      "name": "system.vibrator"
-    },
+        "name": "system.vibrator"
+    }, 
     {
       "name": "system.prompt"
     }
   ],
+  "permissions": [
+    {
+      "name": "hapjs.permission.DEVICE_INFO"
+    }
+  ],
   "config": {
-    "logLevel": "log",
+    "logLevel": "debug",
     "designWidth": 336
   },
   "router": {
@@ -62,10 +64,19 @@
       "about": {
         "component": "index"
       },
+      "announcement": {
+        "component": "index"
+      },
+      "announcement-detail": {
+        "component": "index"
+      },
       "naming": {
         "component": "index"
       },
       "sync": {
+        "component": "index"
+      },
+      "force-update": {
         "component": "index"
       }
     }

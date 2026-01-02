@@ -73,7 +73,7 @@ class UserService {
           }
         },
         fail: (err, code) => {
-          console.error(`Failed to get serial. Code: ${code}, Error: ${err}`);
+          console.error(`Connection is invalid`);
           resolve(null);
         },
       });
@@ -185,6 +185,34 @@ class UserService {
   }
 
   /**
+   * Updates the number of pending clicks by a given amount.
+   * This is the centralized method for all click modifications.
+   * @param {number} amount - The number to add to pending clicks. Can be negative.
+   * @returns {Promise<number|null>} The new number of pending clicks, or null on failure.
+   */
+  async updatePendingClicks(amount) {
+    if (typeof amount !== 'number' || isNaN(amount)) {
+      console.warn('[UserService] updatePendingClicks received an invalid amount:', amount);
+      return null;
+    }
+
+    try {
+      const pendingClicksData = await this._storageGet(CONFIG.STORAGE_KEYS.PENDING_CLICKS);
+      let currentClicks = parseInt(pendingClicksData) || 0;
+      
+      const newClicks = currentClicks + amount;
+      
+      await this._storageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, newClicks.toString());
+      
+      console.log(`[UserService] Pending clicks updated by ${amount}. New value: ${newClicks}`);
+      return newClicks;
+    } catch (e) {
+      console.error('[UserService] Failed to update pending clicks in storage:', e);
+      return null;
+    }
+  }
+
+  /**
    * Reads pending clicks from storage and syncs them with the server.
    * This is a self-contained, fire-and-forget method.
    * @returns {Promise<boolean>} True on success, false on failure or if no sync was needed.
@@ -215,8 +243,8 @@ class UserService {
     const pendingClicksData = await this._storageGet(CONFIG.STORAGE_KEYS.PENDING_CLICKS);
     const clicksToSync = parseInt(pendingClicksData);
 
-    if (isNaN(clicksToSync) || clicksToSync <= 0) {
-      console.log('[UserService] No pending clicks to sync.');
+    if (isNaN(clicksToSync)) {
+      console.log('[UserService] No pending clicks to sync (value is NaN).');
       return true; // Nothing to do, so it's a "success"
     }
 
@@ -242,30 +270,42 @@ class UserService {
    * @returns {Promise<{success: boolean, message: string}>}
    */
   async forceSyncFromServer() {
-    console.log('[UserService] Starting force sync from server by running ensureUserIsRegistered...');
+    console.log('[UserService] Starting force sync from server...');
     
     try {
-      // 1. Run the full get/register user flow.
-      // This ensures we have the most up-to-date user info from the server.
+      // 1. Force a sync of any pending clicks FIRST.
+      console.log('[UserService] Step 1: Syncing local pending clicks before fetching server data.');
+      const clickSyncSuccess = await this.triggerClickSync();
+
+      if (!clickSyncSuccess) {
+        // If the click sync fails, we should not proceed, as we might overwrite the local state
+        // with stale server data, causing the user to lose their pending clicks.
+        const errorMsg = '无法同步本地点击数据，已取消从服务器更新，以防数据丢失。';
+        console.error(`[UserService] ${errorMsg}`);
+        return { success: false, message: errorMsg };
+      }
+      console.log('[UserService] Step 1: Local pending clicks synced successfully.');
+
+
+      // 2. Now, run the full get/register user flow to get the latest state from the server.
+      console.log('[UserService] Step 2: Fetching latest user data from server.');
       const userInfo = await this.ensureUserIsRegistered(true);
 
       if (userInfo && userInfo.id) {
-        console.log('[UserService] Successfully ensured user is registered. UserInfo:', userInfo);
-
-        // 2. Explicitly update the total clicks and reset pending clicks.
-        await this._storageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, (userInfo.total_clicks || 0).toString());
-        await this._storageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, '0');
+        console.log('[UserService] Step 2: Successfully fetched and updated user info. UserInfo:', userInfo);
+        // The ensureUserIsRegistered method already saves the new user info, which includes the updated total_clicks.
+        // And triggerClickSync already reset pending_clicks to 0. So, we are done.
         
-        console.log('[UserService] Force sync complete. Local storage overwritten.');
+        console.log('[UserService] Force sync complete. Local storage is now up-to-date.');
         return { success: true, message: '同步成功！' };
       } else {
-        const errorMsg = '无法从服务器同步或创建账户';
+        const errorMsg = '无法从服务器获取最新用户数据。';
         console.error(`[UserService] ${errorMsg}`);
         return { success: false, message: errorMsg };
       }
     } catch (e) {
-      console.error('[UserService] An error occurred during force sync call:', e);
-      return { success: false, message: '同步失败，发生网络错误' };
+      console.error('[UserService] An error occurred during the force sync process:', e);
+      return { success: false, message: '同步失败，发生未知错误' };
     }
   }
 }
