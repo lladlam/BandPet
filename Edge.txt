@@ -1,0 +1,815 @@
+// supabase/functions/bright-responder/index.ts
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.38.0'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS'
+}
+
+function handleCors(request: Request): Response | null {
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+  return null
+}
+
+serve(async (req: Request) => {
+  const corsResponse = handleCors(req)
+  if (corsResponse) return corsResponse
+
+  try {
+    if (req.method !== 'POST') {
+      return new Response(
+        JSON.stringify({ error: 'Method not allowed' }),
+        { status: 405, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    const requestData = await req.json()
+    const { action } = requestData
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || ''
+    const supabaseKey = Deno.env.get('SUPABASE_ANON_KEY') || ''
+    
+    const supabaseClient = createClient(supabaseUrl, supabaseKey)
+
+    switch (action) {
+      case 'check_registration':
+        return await handleCheckRegistration(supabaseClient, requestData)
+      case 'register_device_and_get_id':
+        return await handleRegisterDevice(supabaseClient, requestData)
+      case 'verify_user_id_and_restore':
+        return await handleVerifyUserId(supabaseClient, requestData)
+      case 'check_pet_name':
+        return await handleCheckPetName(supabaseClient, requestData)
+      case 'set_pet_name':
+        return await handleSetPetName(supabaseClient, requestData)
+      case 'get_rankings':
+        return await handleGetRankings(supabaseClient, requestData)
+      case 'sync_clicks':
+        return await handleSyncClicks(supabaseClient, requestData)
+      case 'get_announcements':
+        return await handleGetAnnouncements(supabaseClient, requestData)
+      case 'check_update':
+         return await handleCheckUpdate(supabaseClient, requestData)
+      case 'sync_from_server':
+        return await handleSyncFromServer(supabaseClient, requestData);
+      default:
+        return new Response(
+          JSON.stringify({ error: 'Unknown action' }),
+          { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        )
+    }
+  } catch (error) {
+    console.error('Error in edge function:', error)
+    return new Response(
+      JSON.stringify({ 
+        error: 'Internal server error',
+        message: error.message
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+})
+
+// 1. 检查设备注册状态 - 完全简化
+async function handleCheckRegistration(supabaseClient: any, requestData: any): Promise<Response> {
+  const { device_id } = requestData
+
+  if (!device_id) {
+    return new Response(
+      JSON.stringify({ error: 'device_id is required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+
+  try {
+    const { data: device, error } = await supabaseClient
+      .from('devices')
+      .select('*, users(*)')
+      .eq('device_id', device_id)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Database error:', error)
+      return new Response(
+        JSON.stringify({ error: 'Database query failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    if (device && device.user_id) {
+      const user = device.users
+      
+      // 只检查自动激活次数
+      if (device.auto_activation_count >= 5) {
+        return new Response(
+          JSON.stringify({
+            is_registered: true,
+            can_auto_activate: false,
+            reason: 'auto_activation_exceeded',
+            message: '自动激活次数已达上限'
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+        )
+      }
+
+      // 更新自动激活次数
+      await supabaseClient
+        .from('devices')
+        .update({ 
+          auto_activation_count: device.auto_activation_count + 1,
+          last_login_time: new Date().toISOString()
+        })
+        .eq('device_id', device_id)
+
+      return new Response(
+        JSON.stringify({
+          is_registered: true,
+          can_auto_activate: true,
+          auto_activation_count: device.auto_activation_count + 1,
+          userInfo: {
+            id: user.user_number,
+            user_number: user.user_number,
+            pet_name: user.pet_name || `宠物_${user.user_number}`,
+            total_clicks: user.total_clicks || 0
+          }
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    } else {
+      return new Response(
+        JSON.stringify({
+          is_registered: false,
+          can_auto_activate: false,
+          message: '设备未注册'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+  } catch (error) {
+    console.error('Error in check registration:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+}
+
+// 2. 注册设备 - 完全简化
+async function handleRegisterDevice(supabaseClient: any, requestData: any): Promise<Response> {
+  const { device_id } = requestData
+
+  if (!device_id) {
+    return new Response(
+      JSON.stringify({ error: 'device_id is required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+
+  try {
+    // 检查设备是否已存在
+    const { data: existingDevice, error: deviceError } = await supabaseClient
+      .from('devices')
+      .select('*, users(*)')
+      .eq('device_id', device_id)
+      .maybeSingle()
+
+    if (deviceError) {
+      console.error('Check device error:', deviceError)
+    }
+
+    // 如果设备已存在且有关联用户，直接返回
+    if (existingDevice && existingDevice.user_id) {
+      const user = existingDevice.users
+      
+      // 更新登录时间
+      await supabaseClient
+        .from('devices')
+        .update({ last_login_time: new Date().toISOString() })
+        .eq('device_id', device_id)
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          userInfo: {
+            id: user.user_number,
+            user_number: user.user_number,
+            pet_name: user.pet_name || `宠物_${user.user_number}`,
+            total_clicks: user.total_clicks || 0
+          },
+          message: '设备已注册，返回现有用户'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    // 生成用户编号
+    const userNumber = await generateUserNumber(supabaseClient)
+    
+    // 创建新用户
+    const { data: newUser, error: userError } = await supabaseClient
+      .from('users')
+      .insert({
+        user_number: userNumber,
+        pet_name: `宠物_${userNumber}`,
+        total_clicks: 0,
+        last_login_time: new Date().toISOString()
+      })
+      .select()
+      .single()
+
+    if (userError) {
+      console.error('Create user error:', userError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to create user' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    // 创建设备记录或更新现有记录
+    const now = new Date().toISOString()
+    if (existingDevice) {
+      // 更新现有设备（没有用户关联的情况）
+      await supabaseClient
+        .from('devices')
+        .update({
+          user_id: newUser.id,
+          auto_activation_count: 0,
+          last_login_time: now
+        })
+        .eq('device_id', device_id)
+    } else {
+      // 创建新设备
+      await supabaseClient
+        .from('devices')
+        .insert({
+          device_id: device_id,
+          user_id: newUser.id,
+          auto_activation_count: 0,
+          last_login_time: now
+        })
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        userInfo: {
+          id: newUser.user_number,
+          user_number: newUser.user_number,
+          pet_name: newUser.pet_name,
+          total_clicks: newUser.total_clicks
+        },
+        message: '注册成功'
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  } catch (error) {
+    console.error('Error in register device:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+}
+
+// 3. 验证用户ID - 完全简化
+async function handleVerifyUserId(supabaseClient: any, requestData: any): Promise<Response> {
+  const { device_id, user_id } = requestData
+
+  if (!device_id || !user_id) {
+    return new Response(
+      JSON.stringify({ error: 'device_id and user_id are required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+
+  try {
+    // 查找用户
+    const { data: user, error: userError } = await supabaseClient
+      .from('users')
+      .select('*')
+      .eq('user_number', user_id)
+      .maybeSingle()
+
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'user_not_found',
+          message: '用户ID不存在'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    // 检查设备是否存在
+    const { data: currentDevice, error: currentDeviceError } = await supabaseClient
+      .from('devices')
+      .select('*')
+      .eq('device_id', device_id)
+      .maybeSingle()
+
+    if (currentDeviceError) {
+      console.error('Find current device error:', currentDeviceError)
+    }
+
+    // 更新或创建设备记录
+    const now = new Date().toISOString()
+    if (currentDevice) {
+      await supabaseClient
+        .from('devices')
+        .update({
+          user_id: user.id,
+          last_login_time: now,
+          auto_activation_count: (currentDevice.auto_activation_count || 0) + 1
+        })
+        .eq('device_id', device_id)
+    } else {
+      await supabaseClient
+        .from('devices')
+        .insert({
+          device_id: device_id,
+          user_id: user.id,
+          auto_activation_count: 1,
+          last_login_time: now
+        })
+    }
+
+    // 更新用户最后登录时间
+    await supabaseClient
+      .from('users')
+      .update({ last_login_time: now })
+      .eq('id', user.id)
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        userInfo: {
+          id: user.user_number,
+          user_number: user.user_number,
+          pet_name: user.pet_name,
+          total_clicks: user.total_clicks || 0
+        },
+        message: '验证成功，数据已恢复'
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  } catch (error) {
+    console.error('Error in verify user ID:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+}
+
+// 4. 检查宠物名是否可用
+async function handleCheckPetName(supabaseClient: any, requestData: any): Promise<Response> {
+  const { pet_name } = requestData
+
+  if (!pet_name) {
+    return new Response(
+      JSON.stringify({ error: 'pet_name is required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+
+  try {
+    const { data: existingPet, error } = await supabaseClient
+      .from('users')
+      .select('id')
+      .eq('pet_name', pet_name)
+      .maybeSingle()
+
+    if (error) {
+      console.error('Check pet name error:', error)
+      return new Response(
+        JSON.stringify({ error: 'Database query failed' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    return new Response(
+      JSON.stringify({
+        isAvailable: !existingPet,
+        message: existingPet ? '该宠物名已被使用' : '该宠物名可用'
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  } catch (error) {
+    console.error('Error in check pet name:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+}
+
+// 5. 设置宠物名
+async function handleSetPetName(supabaseClient: any, requestData: any): Promise<Response> {
+  const { user_id, new_name } = requestData
+
+  if (!user_id || !new_name) {
+    return new Response(
+      JSON.stringify({ error: 'user_id and new_name are required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+
+  try {
+    // 检查新名字是否可用
+    const { data: existingPet, error: checkError } = await supabaseClient
+      .from('users')
+      .select('id')
+      .eq('pet_name', new_name)
+      .maybeSingle()
+
+    if (checkError) {
+      console.error('Check pet name error:', checkError)
+    }
+
+    if (existingPet) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'name_already_used',
+          message: '该宠物名已被使用'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    // 更新宠物名
+    const { error: updateError } = await supabaseClient
+      .from('users')
+      .update({
+        pet_name: new_name,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_number', user_id)
+
+    if (updateError) {
+      console.error('Update pet name error:', updateError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to update pet name' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: '宠物名修改成功'
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  } catch (error) {
+    console.error('Error in set pet name:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+}
+
+// 6. 获取排行榜
+async function handleGetRankings(supabaseClient: any, requestData: any): Promise<Response> {
+  const { limit = 10 } = requestData
+
+  try {
+    const { data: rankings, error } = await supabaseClient
+      .from('users')
+      .select('user_number, pet_name, total_clicks')
+      .order('total_clicks', { ascending: false })
+      .limit(limit)
+
+    if (error) {
+      console.error('Get rankings error:', error)
+      return new Response(
+        JSON.stringify({ error: 'Failed to get rankings' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        rankings: rankings.map((user: any) => ({
+          user_id: user.user_number,
+          pet_name: user.pet_name || `宠物_${user.user_number}`,
+          clicks: user.total_clicks || 0
+        }))
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  } catch (error) {
+    console.error('Error in get rankings:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+}
+
+// 7. 同步点击次数 - 完全简化，移除所有设备检测
+async function handleSyncClicks(supabaseClient: any, requestData: any): Promise<Response> {
+  const { user_id, click_count } = requestData
+
+  if (!user_id || click_count === undefined) {
+    return new Response(
+      JSON.stringify({ error: 'user_id and click_count are required' }),
+      { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+
+  try {
+    // 查找用户
+    const { data: user, error: userError } = await supabaseClient
+      .from('users')
+      .select('id, user_number, total_clicks')
+      .eq('user_number', user_id)
+      .maybeSingle()
+
+    if (userError || !user) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'user_not_found',
+          message: '用户不存在'
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    // 直接更新点击次数 - 完全不检查设备状态
+    const newTotalClicks = (user.total_clicks || 0) + click_count
+    
+    const { error: updateError } = await supabaseClient
+      .from('users')
+      .update({
+        total_clicks: newTotalClicks,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+
+    if (updateError) {
+      console.error('Update clicks error:', updateError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to update clicks' }),
+        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      )
+    }
+
+    return new Response(
+      JSON.stringify({ 
+        success: true,
+        new_total_clicks: newTotalClicks
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  } catch (error) {
+    console.error('Error in sync clicks:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+    )
+  }
+}
+
+// 获取公告列表
+async function handleGetAnnouncements(supabaseClient: any, requestData: any): Promise<Response> {
+  const { limit = 10 } = requestData;
+  
+  try {
+    const now = new Date().toISOString();
+    
+    // 获取当前有效的公告（按优先级排序）
+    const { data: announcements, error } = await supabaseClient
+      .from('announcements')
+      .select('id, title, content, priority, start_time, end_time, created_at')
+      .eq('is_active', true)
+      .lte('start_time', now)      // 开始时间 <= 当前时间
+      .gte('end_time', now)        // 结束时间 >= 当前时间
+      .or(`end_time.is.null,end_time.gte.${now}`) // 或者没有结束时间
+      .order('priority', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      console.error('Get announcements error:', error);
+      return new Response(
+        JSON.stringify({ error: 'Failed to get announcements' }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        announcements: announcements || [],
+        count: announcements?.length || 0,
+        timestamp: now
+      }),
+      { status: 200, headers: corsHeaders }
+    );
+  } catch (error) {
+    console.error('Error in get announcements:', error);
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+// 检查应用更新
+async function handleCheckUpdate(supabaseClient: any, requestData: any): Promise<Response> {
+  const { current_version_code } = requestData;
+  
+  if (!current_version_code) {
+    return new Response(
+      JSON.stringify({ error: 'current_version_code is required' }),
+      { status: 400, headers: corsHeaders }
+    );
+  }
+  
+  try {
+    // 获取最新的版本信息
+    const { data: latestVersion, error } = await supabaseClient
+      .from('app_versions')
+      .select('*')
+      .order('version_code', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.error('Get latest version error:', error);
+      return new Response(
+        JSON.stringify({ error: 'Failed to get version info' }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    if (!latestVersion) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          has_update: false,
+          message: 'No version information found'
+        }),
+        { status: 200, headers: corsHeaders }
+      );
+    }
+
+    const currentVersionCode = parseInt(current_version_code) || 0;
+    const latestVersionCode = latestVersion.version_code || 0;
+    
+    // 检查是否需要更新
+    const has_update = latestVersionCode > currentVersionCode;
+    
+    // 检查当前版本是否低于最低要求版本
+    const is_force_update = latestVersion.force_update && 
+                          latestVersion.min_required_version > currentVersionCode;
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        has_update: has_update,
+        update_info: has_update ? {
+          version_name: latestVersion.version_name,
+          version_code: latestVersion.version_code,
+          title: latestVersion.title,
+          changelog: latestVersion.changelog,
+          download_url: latestVersion.download_url,
+          force_update: is_force_update,
+          min_required_version: latestVersion.min_required_version,
+          release_time: latestVersion.release_time
+        } : null,
+        is_force_update: is_force_update,
+        current_version_code: currentVersionCode,
+        latest_version_code: latestVersionCode
+      }),
+      { status: 200, headers: corsHeaders }
+    );
+  } catch (error) {
+    console.error('Error in check update:', error);
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+// 从服务器同步数据到本地
+async function handleSyncFromServer(supabaseClient: any, requestData: any): Promise<Response> {
+  const { user_id } = requestData;
+
+  if (!user_id) {
+    return new Response(
+      JSON.stringify({ error: 'user_id is required' }),
+      { status: 400, headers: corsHeaders }
+    );
+  }
+
+  try {
+    // 直接查询用户表获取最新数据
+    const { data: user, error } = await supabaseClient
+      .from('users')
+      .select('user_number, pet_name, total_clicks, updated_at')
+      .eq('user_number', user_id)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Get user error:', error);
+      return new Response(
+        JSON.stringify({ error: 'Database query failed' }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    if (!user) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'user_not_found',
+          message: '用户不存在'
+        }),
+        { status: 200, headers: corsHeaders }
+      );
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        userInfo: {
+          id: user.user_number,
+          user_number: user.user_number,
+          pet_name: user.pet_name || `宠物_${user.user_number}`,
+          total_clicks: user.total_clicks || 0,
+          updated_at: user.updated_at
+        },
+        message: '数据同步成功'
+      }),
+      { status: 200, headers: corsHeaders }
+    );
+  } catch (error) {
+    console.error('Error in sync from server:', error);
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+// 生成用户编号
+async function generateUserNumber(supabaseClient: any): Promise<string> {
+  try {
+    // 先尝试从 user_numbers 表获取
+    const { data: numberData, error } = await supabaseClient
+      .from('user_numbers')
+      .select('next_number')
+      .single()
+
+    if (error || !numberData) {
+      // 如果表不存在或为空，查找当前最大编号
+      const { data: maxUser } = await supabaseClient
+        .from('users')
+        .select('user_number')
+        .order('user_number', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      let nextNum = 1
+      if (maxUser && maxUser.user_number) {
+        const currentNum = parseInt(maxUser.user_number)
+        if (!isNaN(currentNum)) {
+          nextNum = currentNum + 1
+        }
+      }
+
+      // 创建初始记录
+      await supabaseClient
+        .from('user_numbers')
+        .insert({ next_number: nextNum + 1 })
+
+      return nextNum.toString().padStart(7, '0')
+    }
+
+    const nextNumber = numberData.next_number
+    
+    // 更新下一个编号
+    await supabaseClient
+      .from('user_numbers')
+      .update({ next_number: nextNumber + 1 })
+      .eq('next_number', nextNumber)
+
+    return nextNumber.toString().padStart(7, '0')
+  } catch (error) {
+    console.error('Error generating user number:', error)
+    // 生成一个随机编号作为回退
+    const randomNum = Math.floor(1000000 + Math.random() * 9000000)
+    return randomNum.toString().slice(0, 7)
+  }
+}

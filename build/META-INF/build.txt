@@ -1,7 +1,7 @@
 originType=undefined
 toolkit=2.0.5
-timeStamp=2026-01-02T15:55:12.945Z
-node=v22.21.1
+timeStamp=2026-01-04T14:56:48.161Z
+node=v20.18.3
 platform=win32
 arch=x64
 component=true

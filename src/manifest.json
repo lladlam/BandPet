@@ -1,8 +1,8 @@
 {
   "package": "com.lladlam.bandpet.9pro",
   "name": "BandPet",
-  "versionName": "0.4.1",
-  "versionCode": 41,
+  "versionName": "0.4.2",
+  "versionCode": 42,
   "minPlatformVersion": 1000,
   "icon": "/common/icon.png",
   "deviceTypeList": [

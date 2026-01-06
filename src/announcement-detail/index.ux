@@ -12,14 +12,14 @@
       </div>
 
       <!-- Page Specific Content -->
-      <div class="page-content">
+      <scroll class="page-content" scroll-y="true">
         <div class="detail-content">
           <text class="detail-title">{{ title }}</text>
           <text class="detail-date">{{ creation_date }}</text>
           <div class="divider"></div>
           <text class="detail-body">{{ body }}</text>
         </div>
-      </div>
+      </scroll>
     </div>
     <!-- Back Button on top layer -->
     <image src="../common/back.png" class="page-header-back-button" onclick="goBack" style="top: 5px;"></image>
@@ -69,7 +69,6 @@
     width: 100%;
     flex-direction: column;
     align-items: center;
-    overflow-y: scroll; /* This works within a stack layout */
   }
   .detail-content {
     width: 90%;

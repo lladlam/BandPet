@@ -15,11 +15,11 @@
     <div class="page-content">
       <div class="content">
         <text class="app-name">BANDPET</text>
-        <text class="app-version">版本 0.4.1</text>
+        <text class="app-version">版本 0.4.2</text>
         <text class="dev-title" style="margin-top: 30px;">参与开发的人员</text>
         <div class="dev-list">
           <text class="dev-name">@lladlam</text>
-          <text class="dev-name">@Eric齐齐</text>
+          <text class="dev-name">@Eric齐齐(0.4.0退)</text>
           <text class="dev-name">@御与魚余鱼</text>
           <text class="dev-name">@无源流沙</text>
         </div>
