@@ -14,9 +14,6 @@
         <div class="menu-item" onclick="syncCloudToLocal">
           <text class="menu-text">从云端同步至本地</text>
         </div>
-        <div class="menu-item" onclick="syncLocalToCloud">
-          <text class="menu-text">从本地同步至云端</text>
-        </div>
       </div>
     </div>
   </div>
@@ -30,13 +27,13 @@
   .page-header-back-button { width: 80px; height: 80px; position: absolute; left: 0px; }
   .page-header-title { color: #FFFFFF; font-size: 32px; }
   .header-title-time { flex-direction: column; align-items: center; }
-    .page-content {
-      flex-direction: column;
-      width: 100%;
-      flex: 1; /* Take up remaining vertical space */
-      align-items: center;
-      overflow-y: scroll; /* Allow content to scroll */
-    }
+  .page-content {
+    flex-direction: column;
+    width: 100%;
+    flex: 1;
+    align-items: center;
+    overflow-y: scroll;
+  }
   .menu-list { flex-direction: column; width: 90%; }
   .menu-item { width: 100%; height: 90px; border-radius: 20px; background-color: #1A1A1A; justify-content: center; align-items: center; margin-bottom: 20px; }
   .menu-text { color: #FFFFFF; font-size: 32px; }
@@ -64,31 +61,15 @@
     goBack() {
       router.back();
     },
+    
+    // 从云端同步至本地：先上传未同步数据，再下载最新数据
     async syncCloudToLocal() {
       prompt.showToast({ message: '正在从云端同步...' });
       const result = await UserService.forceSyncFromServer();
       prompt.showToast({ message: result.message });
       if (result.success) {
-        // Potentially notify previous page to reload, but for now this is fine.
         setTimeout(() => { this.goBack() }, 1000);
       }
-    },
-    async syncLocalToCloud() {
-      prompt.showToast({ message: '正在上传本地进度...' });
-      const uploadSuccess = await UserService.triggerClickSync();
-
-      if (uploadSuccess) {
-        prompt.showToast({ message: '上传成功！正在刷新数据...' });
-        const refreshResult = await UserService.forceSyncFromServer();
-        if (refreshResult.success) {
-          prompt.showToast({ message: '数据刷新成功！' });
-        } else {
-          prompt.showToast({ message: '刷新失败，请稍后重试' });
-        }
-      } else {
-        prompt.showToast({ message: '上传失败或无待同步数据' });
-      }
-      setTimeout(() => { this.goBack() }, 1000);
     }
   }
 </script>

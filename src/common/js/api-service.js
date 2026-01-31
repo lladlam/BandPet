@@ -188,22 +188,53 @@ class ApiService {
 
   // 检查应用更新
   async checkAppUpdate(currentVersionCode) {
+    console.log('[ApiService] checkAppUpdate called with currentVersionCode:', currentVersionCode);
+    
     try {
       const result = await this.request('check_update', {
         current_version_code: currentVersionCode
       });
       
-      return {
+      console.log('[ApiService] checkAppUpdate raw result:', JSON.stringify(result));
+      console.log('[ApiService] checkAppUpdate has_update:', result.has_update);
+      console.log('[ApiService] checkAppUpdate update_info:', JSON.stringify(result.update_info));
+      console.log('[ApiService] checkAppUpdate is_force_update:', result.is_force_update);
+      
+      // 确保 updateInfo 包含所有必要字段
+      let updateInfo = null;
+      if (result.update_info) {
+        updateInfo = {
+          version_name: result.update_info.version_name || '',
+          version_code: result.update_info.version_code || 0,
+          title: result.update_info.title || '发现新版本',
+          changelog: result.update_info.changelog || '',
+          download_url: result.update_info.download_url || '',
+          force_update: result.update_info.force_update || false,
+          min_required_version: result.update_info.min_required_version || 0,
+          release_time: result.update_info.release_time || ''
+        };
+        console.log('[ApiService] checkAppUpdate updateInfo constructed:', JSON.stringify(updateInfo));
+      } else {
+        console.log('[ApiService] checkAppUpdate update_info is null or undefined');
+      }
+      
+      const returnResult = {
         success: result.success || false,
         hasUpdate: result.has_update || false,
-        updateInfo: result.update_info || null,
+        updateInfo: updateInfo,
         isForceUpdate: result.is_force_update || false,
         currentVersionCode: result.current_version_code || currentVersionCode,
         latestVersionCode: result.latest_version_code || currentVersionCode,
         error: result.error
       };
+      
+      console.log('[ApiService] checkAppUpdate return result:', JSON.stringify(returnResult));
+      
+      return returnResult;
     } catch (error) {
-      console.error('检查更新失败:', error);
+      console.error('[ApiService] checkAppUpdate error:', error);
+      console.error('[ApiService] checkAppUpdate error message:', error.message);
+      console.error('[ApiService] checkAppUpdate error stack:', error.stack);
       return {
         success: false,
         error: error.message,

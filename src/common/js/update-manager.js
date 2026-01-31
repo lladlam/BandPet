@@ -7,16 +7,21 @@ import { CONFIG } from './config.js';
 
 class UpdateManager {
   constructor() {
-    this.checkInterval = CONFIG.APP.CHECK_UPDATE_INTERVAL || 3600000; // 1小时
+    this.checkInterval = CONFIG.APP.CHECK_UPDATE_INTERVAL || 360000; // 
   }
   
   // 检查更新（带频率限制）
   async checkUpdate(forceCheck = false) {
+    console.log('[UpdateManager] checkUpdate called with forceCheck:', forceCheck);
+    
     try {
       // 1. 检查是否需要进行更新检查
       if (!forceCheck) {
         const shouldCheck = await this.shouldCheckUpdate();
+        console.log('[UpdateManager] shouldCheckUpdate result:', shouldCheck);
+        
         if (!shouldCheck) {
+          console.log('[UpdateManager] Skipping update check - not time yet');
           return {
             success: true,
             skipped: true,
@@ -27,37 +32,60 @@ class UpdateManager {
       
       // 2. 获取当前版本号
       const currentVersionCode = CONFIG.APP.VERSION_CODE;
+      console.log('[UpdateManager] Current version code:', currentVersionCode);
       
       // 3. 调用API检查更新
+      console.log('[UpdateManager] Calling ApiService.checkAppUpdate...');
       const result = await ApiService.checkAppUpdate(currentVersionCode);
       
+      console.log('[UpdateManager] ApiService.checkAppUpdate result:', JSON.stringify(result));
+      
       if (result.success) {
+        console.log('[UpdateManager] Update check successful');
+        
         // 4. 记录本次检查时间
         await this.recordUpdateCheck();
         
         // 5. 处理更新信息
         if (result.hasUpdate) {
+          console.log('[UpdateManager] Update available!');
           const updateInfo = result.updateInfo;
+          console.log('[UpdateManager] Update info:', JSON.stringify(updateInfo));
           
           // 检查用户是否已经忽略此版本
           const ignored = await this.isVersionIgnored(updateInfo.version_code);
+          console.log('[UpdateManager] Version ignored:', ignored);
           
-          if (!ignored && !result.isForceUpdate) {
-            // 非强制更新，缓存更新信息供显示
-            await this.cacheUpdateInfo(updateInfo);
+          // 如果是强制更新，无论是否忽略都保存更新信息
+          if (result.isForceUpdate) {
+            await this.saveUpdateInfo(updateInfo);
+            console.log('[UpdateManager] Saved update info to storage (force update):', JSON.stringify(updateInfo));
+          } else if (!ignored) {
+            // 非强制更新且未忽略，保存更新信息
+            await this.saveUpdateInfo(updateInfo);
+            console.log('[UpdateManager] Saved update info to storage:', JSON.stringify(updateInfo));
+          } else {
+            // 非强制更新且已忽略，不保存更新信息
+            console.log('[UpdateManager] Version ignored, not saving update info');
           }
           
           return {
             ...result,
             ignored: ignored
           };
+        } else {
+          console.log('[UpdateManager] No update available');
         }
+      } else {
+        console.log('[UpdateManager] Update check failed:', result.error);
       }
       
       return result;
       
     } catch (error) {
-      console.error('检查更新失败:', error);
+      console.error('[UpdateManager] checkUpdate error:', error);
+      console.error('[UpdateManager] checkUpdate error message:', error.message);
+      console.error('[UpdateManager] checkUpdate error stack:', error.stack);
       return {
         success: false,
         error: error.message,
@@ -100,34 +128,42 @@ class UpdateManager {
     }
   }
   
-  // 缓存更新信息
-  async cacheUpdateInfo(updateInfo) {
+  // 保存更新信息到本地存储
+  async saveUpdateInfo(updateInfo) {
     try {
       await storage.set({
         key: CONFIG.STORAGE_KEYS.CACHED_UPDATE_INFO,
         value: JSON.stringify(updateInfo)
       });
+      console.log('[UpdateManager] Saved update info to storage');
     } catch (error) {
-      console.error('缓存更新信息失败:', error);
+      console.error('保存更新信息失败:', error);
     }
   }
   
-  // 获取缓存的更新信息
-  async getCachedUpdateInfo() {
+  // 从本地存储获取更新信息
+  async getSavedUpdateInfo() {
     try {
       const result = await storage.get({
         key: CONFIG.STORAGE_KEYS.CACHED_UPDATE_INFO
       });
       
       if (result && result.value) {
+        console.log('[UpdateManager] Retrieved update info from storage');
         return JSON.parse(result.value);
       }
       
+      console.log('[UpdateManager] No update info found in storage');
       return null;
     } catch (error) {
-      console.error('获取缓存更新信息失败:', error);
+      console.error('获取更新信息失败:', error);
       return null;
     }
+  }
+  
+  // 从本地存储获取更新信息（兼容命名，别名）
+  async getCachedUpdateInfo() {
+    return this.getSavedUpdateInfo();
   }
   
   // 忽略某个版本
@@ -166,7 +202,7 @@ class UpdateManager {
       if (isForceUpdate) {
         // 强制更新，直接跳转到强制更新页面
         router.push({
-          uri: 'pages/force-update/index',
+          uri: '/force-update',
           params: {
             updateInfo: updateInfo,
             isForceUpdate: true
@@ -176,34 +212,15 @@ class UpdateManager {
         return;
       }
       
-      // 非强制更新，显示对话框
-      prompt.showDialog({
-        title: `发现新版本 ${updateInfo.version_name}`,
-        message: `${updateInfo.title}\n\n${updateInfo.changelog}`,
-        buttons: [
-          {
-            text: '忽略此版本',
-            color: '#8E8E93'
-          },
-          {
-            text: '知道了',
-            color: '#007AFF'
-          }
-        ],
-        success: (index) => {
-          if (index === 0) {
-            // 用户点击忽略此版本
-            resolve('ignore');
-          } else if (index === 1) {
-            // 用户点击知道了
-            resolve('know');
-          }
-        },
-        cancel: () => {
-          // 用户点击对话框外部取消
-          resolve('cancel');
+      // 非强制更新，跳转到普通更新页面
+      router.push({
+        uri: '/update',
+        params: {
+          updateInfo: updateInfo,
+          isForceUpdate: false
         }
       });
+      resolve('normal_update');
     });
   }
   
@@ -214,14 +231,28 @@ class UpdateManager {
       const result = await this.checkUpdate(true);
       
       if (result.success && result.hasUpdate && result.updateInfo) {
+        // 【修复】检查用户是否已忽略此版本
+        const ignored = await this.isVersionIgnored(result.updateInfo.version_code);
+        const isForceUpdate = result.isForceUpdate;
+        
+        console.log('[UpdateManager] Version check result: ignored=' + ignored + ', isForceUpdate=' + isForceUpdate);
+        
+        // 如果版本被忽略且不是强制更新，则不进行任何操作
+        if (ignored && !isForceUpdate) {
+          console.log('[UpdateManager] Version was ignored by user, skipping');
+          return {
+            hasForceUpdate: false
+          };
+        }
+        
         // 如果是强制更新
-        if (result.isForceUpdate) {
+        if (isForceUpdate) {
           // 标记需要强制更新
           await this.markForceUpdateRequired();
           
           // 跳转到强制更新页面（用户无法返回）
           router.push({
-            uri: 'pages/force-update/index',
+            uri: '/force-update',
             params: {
               updateInfo: result.updateInfo,
               isForceUpdate: true
@@ -299,6 +330,8 @@ class UpdateManager {
       await storage.delete({
         key: CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED
       });
+      
+      console.log('[UpdateManager] Cleared update cache');
     } catch (error) {
       console.error('清除更新缓存失败:', error);
     }

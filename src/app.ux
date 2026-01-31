@@ -1,78 +1,14 @@
 <script>
   import UserService from './common/js/userService.js';
-  import UpdateManager from './common/js/update-manager.js';
   import BackInterceptor from './common/js/back-interceptor.js';
-  import router from '@system.router';
-
-  // 应用启动时检查强制更新
-  async function checkForceUpdateOnStart() {
-    try {
-      // 先检查本地是否标记了强制更新
-      const forceUpdateRequired = await UpdateManager.isForceUpdateRequired();
-      
-      if (forceUpdateRequired) {
-        // 如果已经标记了强制更新，跳转到强制更新页面
-        const cachedUpdateInfo = await UpdateManager.getCachedUpdateInfo();
-        
-        if (cachedUpdateInfo) {
-          router.replace({
-            uri: '/force-update',
-            params: {
-              updateInfo: cachedUpdateInfo,
-              isForceUpdate: true
-            }
-          });
-          
-          return true;
-        }
-      }
-      
-      // 检查服务器是否有强制更新
-      const result = await UpdateManager.checkAndHandleForceUpdate();
-      
-      if (result.hasForceUpdate) {
-        // 应用已经被重定向到强制更新页面
-        return true;
-      }
-      
-      return false;
-      
-    } catch (error) {
-      console.error('强制更新检查失败:', error);
-      return false;
-    }
-  }
-
 
   export default {
-    async onCreate() {
-      // console.log('[lifecycle] [app] onCreate - Ensuring user is registered...');
-      // try {
-      //   const userInfo = await UserService.ensureUserIsRegistered();
-      //   if (userInfo) {
-      //     console.log('[lifecycle] [app] User registration confirmed successfully.');
-      //   } else {
-      //     console.error('[lifecycle] [app] Failed to confirm user registration.');
-      //     // In a real app, you might want to show a non-closable error page here.
-      //     // For now, we'll let it proceed, but features requiring a user ID may fail.
-      //   }
-      // } catch (e) {
-      //   console.error('A critical error occurred during app startup in app.ux:', e);
-      // }
+    onCreate() {
+      console.log('[lifecycle] [app] onCreate - App is starting...');
     },
 
     onShow() {
-      // console.log('[lifecycle] [app] onShow - Checking for updates...');
-      // // 检查强制更新
-      // checkForceUpdateOnStart().then((hasForceUpdate) => {
-      //   if (!hasForceUpdate) {
-      //     console.log('[Update] No force update required. App continues.');
-      //     // 可以在这里添加非强制更新的检查逻辑，但为了避免干扰用户，
-      //     // 可以在主页或其他页面的 onShow 中延迟执行
-      //   } else {
-      //     console.log('[Update] Force update is in effect.');
-      //   }
-      // });
+      console.log('[lifecycle] [app] onShow');
     },
 
     onHide() {

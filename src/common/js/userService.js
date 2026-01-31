@@ -255,8 +255,18 @@ class UserService {
 
     // 4. Update storage on success
     if (result.success) {
-      console.log('[UserService] Sync successful. Resetting pending clicks.');
+      console.log('[UserService] Sync successful.');
+      
+      // 【修复】同步成功后，先把待上传数量加到本地总点击数，再清空待上传
+      const currentTotalClicks = parseInt(await this._storageGet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS)) || 0;
+      const updatedTotalClicks = currentTotalClicks + clicksToSync;
+      await this._storageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, updatedTotalClicks.toString());
+      console.log(`[UserService] Added pending clicks to total: ${currentTotalClicks} + ${clicksToSync} = ${updatedTotalClicks}`);
+      
+      // 清空待上传数量
       await this._storageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, '0');
+      console.log('[UserService] Resetting pending clicks to 0');
+      
       return true;
     } else {
       console.error('[UserService] Sync failed:', result.error);
@@ -293,8 +303,12 @@ class UserService {
 
       if (userInfo && userInfo.id) {
         console.log('[UserService] Step 2: Successfully fetched and updated user info. UserInfo:', userInfo);
-        // The ensureUserIsRegistered method already saves the new user info, which includes the updated total_clicks.
-        // And triggerClickSync already reset pending_clicks to 0. So, we are done.
+        
+        // 【修复】同步成功后，将服务器的 total_clicks 覆盖到本地
+        if (userInfo.total_clicks !== undefined) {
+          await this._storageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, userInfo.total_clicks.toString());
+          console.log(`[UserService] Updated local total_clicks to server value: ${userInfo.total_clicks}`);
+        }
         
         console.log('[UserService] Force sync complete. Local storage is now up-to-date.');
         return { success: true, message: '同步成功！' };

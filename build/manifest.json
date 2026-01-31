@@ -1,8 +1,8 @@
 {
   "package": "com.lladlam.bandpet.9pro",
   "name": "BandPet",
-  "versionName": "0.4.2",
-  "versionCode": 42,
+  "versionName": "0.4.3",
+  "versionCode": 43,
   "minPlatformVersion": 1000,
   "icon": "/common/icon.png",
   "deviceTypeList": [
@@ -73,10 +73,7 @@
       "naming": {
         "component": "index"
       },
-      "sync": {
-        "component": "index"
-      },
-      "force-update": {
+      "more-options": {
         "component": "index"
       }
     }
@@ -88,8 +85,8 @@
   "minAPILevel": 1,
   "packageInfo": {
     "toolkit": "2.0.5",
-    "timeStamp": "2026-01-14T08:59:05.113Z",
-    "node": "v22.21.1",
+    "timeStamp": "2026-01-31T16:53:57.314Z",
+    "node": "v22.19.0",
     "platform": "win32",
     "arch": "x64",
     "component": true
