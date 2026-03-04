@@ -1,6 +1,18 @@
 <script>
   import UserService from './common/js/userService.js';
   import BackInterceptor from './common/js/back-interceptor.js';
+  import storage from '@system.storage';
+  import { CONFIG } from './common/js/config.js';
+
+  const _promisifiedStorageGet = (key) => {
+    return new Promise((resolve) => {
+      storage.get({
+        key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      });
+    });
+  };
 
   export default {
     onCreate() {
@@ -11,8 +23,15 @@
       console.log('[lifecycle] [app] onShow');
     },
 
-    onHide() {
+    async onHide() {
       console.log('[lifecycle] [app] onHide - Triggering final click sync before exit.');
+
+      const offlineSetting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
+      if (offlineSetting === 'true') {
+        console.log('[lifecycle] [app] onHide - Offline mode enabled, skip final sync.');
+        return;
+      }
+
       UserService.triggerClickSync();
     },
 

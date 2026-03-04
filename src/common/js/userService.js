@@ -42,6 +42,15 @@ class UserService {
   }
 
   /**
+   * 判断是否开启离线模式。
+   * @returns {Promise<boolean>}
+   */
+  async _isOfflineModeEnabled() {
+    const setting = await this._storageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
+    return setting === 'true';
+  }
+
+  /**
    * Retrieves the raw device identifier, using a fallback for simulators.
    * It also saves the raw ID to storage for future use.
    * @returns {Promise<string|null>} The raw device ID or null on failure.
@@ -117,6 +126,12 @@ class UserService {
         const userInfo = JSON.parse(existingUserInfoJSON);
         if (userInfo && userInfo.id) {
           if (forceSync) {
+            const offlineModeEnabled = await this._isOfflineModeEnabled();
+            if (offlineModeEnabled) {
+              console.log('[UserService] Offline mode enabled, skipping force sync and using local data.');
+              return userInfo;
+            }
+
             console.log('[UserService] Force sync enabled. Attempting to sync latest data from server...');
             try {
               const syncResult = await ApiService.syncFromServer(userInfo.id);
@@ -140,6 +155,12 @@ class UserService {
         // Malformed JSON, proceed with registration.
         console.warn('[UserService] User info in storage is malformed. Proceeding with registration.');
       }
+    }
+
+    const offlineModeEnabled = await this._isOfflineModeEnabled();
+    if (offlineModeEnabled) {
+      console.warn('[UserService] Offline mode enabled and no local user info found. Skipping network registration.');
+      return null;
     }
 
     console.log('[UserService] User not found locally. Starting silent registration process...');
@@ -219,6 +240,11 @@ class UserService {
    */
   async triggerClickSync() {
     console.log('[UserService] Triggering click sync...');
+
+    if (await this._isOfflineModeEnabled()) {
+      console.log('[UserService] Offline mode enabled, skipping click sync.');
+      return false;
+    }
     
     // 1. Get user info
     const userInfoJSON = await this._storageGet(CONFIG.STORAGE_KEYS.USER_INFO);
@@ -281,6 +307,12 @@ class UserService {
    */
   async forceSyncFromServer() {
     console.log('[UserService] Starting force sync from server...');
+
+    if (await this._isOfflineModeEnabled()) {
+      const msg = '离线模式已开启，请关闭离线模式后再同步。';
+      console.warn(`[UserService] ${msg}`);
+      return { success: false, message: msg };
+    }
     
     try {
       // 1. Force a sync of any pending clicks FIRST.

@@ -41,5 +41,6 @@ export const CONFIG = {
     
     // 用户偏好设置
     VIBRATION_ENABLED: 'vibration_enabled', // 点击震动开关
+    OFFLINE_MODE_ENABLED: 'offline_mode_enabled', // 离线模式开关（默认关闭）
   }
 }

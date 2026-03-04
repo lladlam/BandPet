@@ -41,8 +41,20 @@
 
 <script>
   import router from '@system.router';
+  import storage from '@system.storage';
   import prompt from '@system.prompt';
   import UserService from '../common/js/userService.js';
+  import { CONFIG } from '../common/js/config.js';
+
+  const _promisifiedStorageGet = (key) => {
+    return new Promise((resolve) => {
+      storage.get({
+        key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      });
+    });
+  };
 
   export default {
     data: {
@@ -64,6 +76,12 @@
     
     // 从云端同步至本地：先上传未同步数据，再下载最新数据
     async syncCloudToLocal() {
+      const offlineSetting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
+      if (offlineSetting === 'true') {
+        prompt.showToast({ message: '离线模式已开启，无法同步' });
+        return;
+      }
+
       prompt.showToast({ message: '正在从云端同步...' });
       const result = await UserService.forceSyncFromServer();
       prompt.showToast({ message: result.message });

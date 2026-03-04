@@ -9,23 +9,12 @@
     </div>
     
     <list class="menu-list">
-      <list-item type="default" class="menu-item" onclick="goTo('announcement')">
-        <text class="menu-text">公告</text>
-      </list-item>
-      <list-item type="default" class="menu-item" onclick="goTo('leaderboard')">
-        <text class="menu-text">排行榜</text>
-      </list-item>
-      <list-item type="default" class="menu-item" onclick="goTo('exchange')">
-        <text class="menu-text">物品交换</text>
-      </list-item>
-      <list-item type="default" class="menu-item" onclick="goTo('market')">
-        <text class="menu-text">物品市场</text>
-      </list-item>
-      <list-item type="default" class="menu-item" onclick="goTo('customize')">
-        <text class="menu-text">自定义宠物</text>
-      </list-item>
-      <list-item type="default" class="menu-item" onclick="goTo('settings')">
-        <text class="menu-text">设置</text>
+      <list-item
+        type="default"
+        class="menu-item"
+        for="{{ menuItems }}"
+        onclick="goTo($item.uri)">
+        <text class="menu-text">{{$item.title}}</text>
       </list-item>
     </list>
   </div>
@@ -88,20 +77,67 @@
 
 <script>
   import router from '@system.router';
+  import storage from '@system.storage';
+  import { CONFIG } from '../common/js/config.js';
+
+  const _promisifiedStorageGet = (key) => {
+    return new Promise((resolve) => {
+      storage.get({
+        key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      });
+    });
+  };
 
   export default {
     data: {
-      time: '00:00'
+      time: '00:00',
+      offlineModeEnabled: false,
+      menuItems: []
     },
-    onInit() {
+    async onInit() {
       this.updateTime();
+      await this.loadOfflineModeSetting();
+      this.rebuildMenuItems();
       setInterval(this.updateTime, 10000);
+    },
+    async onShow() {
+      await this.loadOfflineModeSetting();
+      this.rebuildMenuItems();
     },
     updateTime() {
       const now = new Date();
       const hours = now.getHours().toString().padStart(2, '0');
       const minutes = now.getMinutes().toString().padStart(2, '0');
       this.time = `${hours}:${minutes}`;
+    },
+    async loadOfflineModeSetting() {
+      try {
+        const setting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
+        this.offlineModeEnabled = setting === 'true';
+      } catch (e) {
+        this.offlineModeEnabled = false;
+      }
+    },
+    rebuildMenuItems() {
+      const items = [];
+
+      if (!this.offlineModeEnabled) {
+        items.push(
+          { title: '公告', uri: 'announcement' },
+          { title: '排行榜', uri: 'leaderboard' },
+          { title: '物品交换', uri: 'exchange' },
+          { title: '物品市场', uri: 'market' }
+        );
+      }
+
+      items.push(
+        { title: '自定义宠物', uri: 'customize' },
+        { title: '设置', uri: 'settings' }
+      );
+
+      this.menuItems = items;
     },
     goBack() {
       router.back();

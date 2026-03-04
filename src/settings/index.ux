@@ -26,7 +26,7 @@
         </div>
       </div>
     </div>
-    <div class="sync-button" onclick="handleCloudSync">
+    <div class="sync-button" onclick="handleCloudSync" show="{{ !offlineModeEnabled }}">
         <text class="sync-button-text">云端同步</text>
     </div>
     <div class="about-button" onclick="goToAbout">
@@ -162,12 +162,17 @@
     data: {
       time: '00:00',
       petName: '加载中...',
-      userId: '加载中...'
+      userId: '加载中...',
+      offlineModeEnabled: false
     },
-    onInit() {
+    async onInit() {
       this.loadUserInfo();
+      await this.loadOfflineModeSetting();
       this.updateTime();
       setInterval(this.updateTime, 10000);
+    },
+    async onShow() {
+      await this.loadOfflineModeSetting();
     },
     async loadUserInfo() {
       console.log('[SettingsPage] Loading user info...');
@@ -203,7 +208,20 @@
       const minutes = now.getMinutes().toString().padStart(2, '0');
       this.time = `${hours}:${minutes}`;
     },
+    async loadOfflineModeSetting() {
+      try {
+        const setting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
+        this.offlineModeEnabled = setting === 'true';
+      } catch (e) {
+        this.offlineModeEnabled = false;
+      }
+    },
     async handleCloudSync() {
+      if (this.offlineModeEnabled) {
+        prompt.showToast({ message: '离线模式已开启，无法云同步' });
+        return;
+      }
+
       console.log('[SettingsPage] Starting cloud sync...');
       prompt.showToast({ message: '正在从云端同步...' });
       

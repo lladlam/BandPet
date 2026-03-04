@@ -265,6 +265,7 @@
       clickCount: 0,
       petImage: '/common/Ra0.png',
       vibrationEnabled: true,
+      offlineModeEnabled: false,
       updateCheckInterval: null,
       chests: [
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' },
@@ -300,6 +301,12 @@
     async onShow() {
       // 每次显示页面时重新加载震动设置（用户可能在设置中更改了）
       await this.loadVibrationSetting();
+      await this.loadOfflineModeSetting();
+
+      if (this.offlineModeEnabled) {
+        console.log('[Main] onShow - Offline mode enabled, skip immediate update check');
+        return;
+      }
       
       // 立即检查更新（从强制更新页面返回时）
       console.log('[Main] onShow - Immediate update check triggered');
@@ -309,6 +316,11 @@
     // 检查更新（定时调用）
     async checkForUpdates() {
       console.log('[Main] checkForUpdates called');
+
+      if (this.offlineModeEnabled) {
+        console.log('[Main] Offline mode enabled, skip update check');
+        return;
+      }
       
       try {
         console.log('[Main] Periodic update check triggered...');
@@ -394,6 +406,8 @@
     },
 
     async loadInitialState() {
+        await this.loadOfflineModeSetting();
+
         const userInfo = await UserService.ensureUserIsRegistered();
         
         if (userInfo && userInfo.id) {
@@ -434,10 +448,27 @@
         this.vibrationEnabled = true;
       }
     },
+
+    async loadOfflineModeSetting() {
+      try {
+        const setting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
+        // 默认关闭离线模式，只有明确设置为 'true' 时才开启
+        this.offlineModeEnabled = setting === 'true';
+        console.log('[Main] Loaded offline mode setting:', this.offlineModeEnabled);
+      } catch (e) {
+        console.error('[Main] Failed to load offline mode setting:', e);
+        this.offlineModeEnabled = false;
+      }
+    },
     
     // 【新增】自动从云端同步至本地的逻辑
     async autoSyncFromCloud() {
       console.log('[Main] Starting auto sync from cloud...');
+
+      if (this.offlineModeEnabled) {
+        console.log('[Main] Offline mode enabled, skip auto sync from cloud');
+        return;
+      }
       
       try {
         // 1. 先尝试上传未同步的数据
@@ -538,7 +569,7 @@
       return `${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`;
     },
 
-    async incrementClick(e) {
+    async incrementClick() {
         // This is the general click handler for the background/pet
         this.clickCount++;
         await UserService.updatePendingClicks(1);
@@ -554,7 +585,7 @@
         setTimeout(() => { this.petImage = '/common/Ra0.png'; }, 200);
     },
 
-    async claimChest(index, e) {
+    async claimChest(index) {
       const chest = this.chests[index];
       if (chest.claimed) {
         prompt.showToast({ message: '宝箱正在冷却中' });
@@ -575,7 +606,7 @@
       }
     },
 
-    openMore(e) {
+    openMore() {
       router.push({ uri: 'more' });
     },
     

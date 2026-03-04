@@ -9,10 +9,32 @@ class UpdateManager {
   constructor() {
     this.checkInterval = CONFIG.APP.CHECK_UPDATE_INTERVAL || 360000; // 
   }
+
+  async _isOfflineModeEnabled() {
+    try {
+      const result = await storage.get({
+        key: CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED
+      });
+      return result === 'true' || (result && result.value === 'true');
+    } catch (error) {
+      console.error('[UpdateManager] 读取离线模式失败:', error);
+      return false;
+    }
+  }
   
   // 检查更新（带频率限制）
   async checkUpdate(forceCheck = false) {
     console.log('[UpdateManager] checkUpdate called with forceCheck:', forceCheck);
+
+    if (await this._isOfflineModeEnabled()) {
+      console.log('[UpdateManager] Offline mode enabled, skip update check');
+      return {
+        success: true,
+        skipped: true,
+        offline: true,
+        message: '离线模式下不检查更新'
+      };
+    }
     
     try {
       // 1. 检查是否需要进行更新检查

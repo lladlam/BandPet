@@ -76,12 +76,32 @@
 
 <script>
   import router from '@system.router';
+  import storage from '@system.storage';
+  import prompt from '@system.prompt';
+  import { CONFIG } from '../common/js/config.js';
+
+  const _promisifiedStorageGet = (key) => {
+    return new Promise((resolve) => {
+      storage.get({
+        key,
+        success: (data) => resolve(data),
+        fail: () => resolve(null)
+      });
+    });
+  };
 
   export default {
     data: {
       time: '00:00'
     },
-    onInit() {
+    async onInit() {
+      const offlineSetting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
+      if (offlineSetting === 'true') {
+        prompt.showToast({ message: '离线模式下无法使用物品交换' });
+        router.back();
+        return;
+      }
+
       this.updateTime();
       setInterval(this.updateTime, 10000);
     },
