@@ -2,7 +2,7 @@
 export const CONFIG = {
   // 中转服务器配置
   SERVER: {
-    BASE_URL: 'http://103.205.253.87:22207'
+    BASE_URL: 'http://mkyun.lladlam.top:3000'
   },
   
   // 注意：URL 前缀在 api-service.js 中硬编码了
@@ -11,8 +11,8 @@ export const CONFIG = {
   // 应用配置
   APP: {
     NAME: 'BandPet',
-    VERSION: '0.4.3 Alpha',
-    VERSION_CODE: 43,  // 用于版本比较的数字（0.4.3 -> 43）
+    VERSION: '0.4.4 Alpha',
+    VERSION_CODE: 44,  // 用于版本比较的数字（0.4.3 -> 43）
     MAX_CLICKS_PER_BATCH: 50,
     SYNC_INTERVAL: 30000,  // 30秒自动同步一次
     RANK_LIMIT: 10,
