@@ -2,7 +2,7 @@
   <div class="page-container">
     <div class="page-header-container">
       <div class="page-header">
-        <image src="../common/back.png" class="page-header-back-button" onclick="goBack"></image>
+        <image src="../common/Back.png" class="page-header-back-button" onclick="goBack"></image>
         <div class="header-title-time">
           <text class="page-time-display">{{ time }}</text>
           <text class="page-header-title">同步选项</text>

@@ -8,7 +8,7 @@
 
       <div class="page-header-container">
         <div class="page-header">
-          <image src="../common/back.png" class="page-header-back-button" onclick="goBack"></image>
+          <image src="../common/Back.png" class="page-header-back-button" onclick="goBack"></image>
           <div class="header-title-time">
             <text class="page-time-display">{{ time }}</text>
             <text class="page-header-title">宠物命名</text>
@@ -25,7 +25,7 @@
             <text>{{ newPetName || '点击输入新名字' }}</text>
             <div class="cursor" if="{{!newPetName}}"></div>
           </div>
-          <image src="../common/check.png" class="confirm-button" onclick="savePetName"></image>
+          <image src="../common/Check.png" class="confirm-button" onclick="savePetName"></image>
           <text class="status-text">{{ statusMessage }}</text>
         </div>
       </div>
@@ -133,11 +133,11 @@
 
 <script>
     import router from '@system.router';
-    import storage from '@system.storage';
     import prompt from '@system.prompt';
     import ApiService from '../common/js/api-service.js';
     import UserService from '../common/js/userService.js';
     import { CONFIG } from '../common/js/config.js';
+    import { storageGet, storageSet } from '../common/js/storage-helper.js';
 
     export default {
       data: {
@@ -154,7 +154,7 @@
   
         // Attempt to load current name for display purposes only
         try {
-          const userInfoJSON = await storage.get({ key: CONFIG.STORAGE_KEYS.USER_INFO });
+          const userInfoJSON = await storageGet(CONFIG.STORAGE_KEYS.USER_INFO);
           if (userInfoJSON) {
             const userInfo = JSON.parse(userInfoJSON);
             this.currentPetName = userInfo.pet_name || '未命名';
@@ -218,10 +218,7 @@
           this.statusMessage = '';
   
           const updatedUserInfo = { ...userInfo, pet_name: this.currentPetName };
-          await storage.set({
-            key: CONFIG.STORAGE_KEYS.USER_INFO,
-            value: JSON.stringify(updatedUserInfo)
-          });
+          await storageSet(CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(updatedUserInfo));
   
           prompt.showToast({ message: '宠物名字已更新！' });
           this.toggleKeyboard(false); // Hide keyboard on success

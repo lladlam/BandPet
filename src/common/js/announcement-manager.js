@@ -1,7 +1,6 @@
-// src/common/js/announcement-manager.js
-import storage from '@system.storage';
 import ApiService from './api-service.js';
 import { CONFIG } from './config.js';
+import { storageDelete, storageGet, storageSet } from './storage-helper.js';
 
 class AnnouncementManager {
   constructor() {
@@ -81,15 +80,8 @@ class AnnouncementManager {
         timestamp: new Date().toISOString()
       };
       
-      await storage.set({
-        key: CONFIG.STORAGE_KEYS.CACHED_ANNOUNCEMENTS,
-        value: JSON.stringify(cacheData)
-      });
-      
-      await storage.set({
-        key: CONFIG.STORAGE_KEYS.LAST_ANNOUNCEMENT_FETCH_TIME,
-        value: new Date().toISOString()
-      });
+      await storageSet(CONFIG.STORAGE_KEYS.CACHED_ANNOUNCEMENTS, JSON.stringify(cacheData));
+      await storageSet(CONFIG.STORAGE_KEYS.LAST_ANNOUNCEMENT_FETCH_TIME, new Date().toISOString());
       
     } catch (error) {
       console.error('缓存公告失败:', error);
@@ -99,9 +91,7 @@ class AnnouncementManager {
   // 获取缓存的公告
   async getCachedAnnouncements() {
     try {
-      const result = await storage.get({
-        key: CONFIG.STORAGE_KEYS.CACHED_ANNOUNCEMENTS
-      });
+      const result = await storageGet(CONFIG.STORAGE_KEYS.CACHED_ANNOUNCEMENTS);
       
       if (result && result.value) {
         const cacheData = JSON.parse(result.value);
@@ -124,13 +114,8 @@ class AnnouncementManager {
   // 清除公告缓存
   async clearCache() {
     try {
-      await storage.delete({
-        key: CONFIG.STORAGE_KEYS.CACHED_ANNOUNCEMENTS
-      });
-      
-      await storage.delete({
-        key: CONFIG.STORAGE_KEYS.LAST_ANNOUNCEMENT_FETCH_TIME
-      });
+      await storageDelete(CONFIG.STORAGE_KEYS.CACHED_ANNOUNCEMENTS);
+      await storageDelete(CONFIG.STORAGE_KEYS.LAST_ANNOUNCEMENT_FETCH_TIME);
     } catch (error) {
       console.error('清除缓存失败:', error);
     }

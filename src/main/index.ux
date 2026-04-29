@@ -21,7 +21,7 @@
     </div>
     
     <div class="bottom-bar">
-      <image src="../common/more.png" class="more-button" onclick="openMore($event)"></image>
+      <image src="../common/More.png" class="more-button" onclick="openMore($event)"></image>
       <div class="click-counter">
         <text class="click-counter-text">{{ clickCount }}</text>
       </div>
@@ -41,11 +41,11 @@
         </div>
         
         <div class="button-container">
-          <div class="ignore-button" onclick="onIgnoreUpdate">
+          <div class="ignore-button" show="{{!forceUpdateRequired}}" onclick="onIgnoreUpdate">
             <text class="ignore-button-text">忽略此版本</text>
           </div>
           <div class="check-button" onclick="onKnowUpdate">
-            <text class="check-button-text">知道了</text>
+            <text class="check-button-text">{{ forceUpdateRequired ? '稍后处理' : '知道了' }}</text>
           </div>
         </div>
       </div>
@@ -273,6 +273,7 @@
       ],
       showUpdateOverlay: false,
       updateInfo: {},
+      forceUpdateRequired: false,
     },
 
     onInit() {
@@ -308,7 +309,7 @@
         return;
       }
       
-      // 立即检查更新（从强制更新页面返回时）
+      // 立即检查更新
       console.log('[Main] onShow - Immediate update check triggered');
       await this.checkForUpdates();
     },
@@ -339,26 +340,11 @@
             console.error('[Main] Failed to save update info:', e);
           }
           
-          // 如果是强制更新，跳转到强制更新页面
-          if (result.isForceUpdate) {
-            console.log('[Main] Force update detected, redirecting...');
-            router.replace({
-              uri: '/force-update',
-              params: {
-                updateInfo: result.updateInfo,
-                isForceUpdate: true
-              }
-            });
-          } else if (!result.ignored) {
-            // 非强制更新，跳转到普通更新页面
-            console.log('[Main] Normal update detected, redirecting to update page...');
-            router.push({
-              uri: '/update',
-              params: {
-                updateInfo: result.updateInfo,
-                isForceUpdate: false
-              }
-            });
+          if (!result.ignored || result.isForceUpdate) {
+            console.log('[Main] Update available, showing in-app overlay.');
+            this.updateInfo = result.updateInfo || {};
+            this.forceUpdateRequired = !!result.isForceUpdate;
+            this.showUpdateOverlay = true;
           }
         } else if (result.skipped) {
           console.log('[Main] Update check skipped (not time yet)');
@@ -394,15 +380,23 @@
       // 隐藏更新弹窗
       this.showUpdateOverlay = false;
       this.updateInfo = {};
+      this.forceUpdateRequired = false;
     },
     
     // 用户点击"知道了"
     async onKnowUpdate() {
       console.log('[Main] User clicked know update');
-      
-      // 隐藏更新弹窗
+
+      if (this.forceUpdateRequired) {
+        prompt.showToast({
+          message: '请尽快升级到最新版本',
+          duration: 2000
+        });
+      }
+
       this.showUpdateOverlay = false;
       this.updateInfo = {};
+      this.forceUpdateRequired = false;
     },
 
     async loadInitialState() {

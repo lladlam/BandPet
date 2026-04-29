@@ -29,7 +29,7 @@
       </div>
     </div>
     <!-- Back Button on top layer for guaranteed clickability -->
-    <image src="../common/back.png" class="page-header-back-button" onclick="goBack" style="top: 5px;"></image>
+    <image src="../common/Back.png" class="page-header-back-button" onclick="goBack" style="top: 5px;"></image>
   </stack>
 </template>
 

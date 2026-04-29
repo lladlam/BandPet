@@ -1,9 +1,6 @@
-// src/common/js/update-manager.js
-import storage from '@system.storage';
 import ApiService from './api-service.js';
-import prompt from '@system.prompt';
-import router from '@system.router';
 import { CONFIG } from './config.js';
+import { storageDelete, storageGet, storageSet } from './storage-helper.js';
 
 class UpdateManager {
   constructor() {
@@ -12,9 +9,7 @@ class UpdateManager {
 
   async _isOfflineModeEnabled() {
     try {
-      const result = await storage.get({
-        key: CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED
-      });
+      const result = await storageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
       return result === 'true' || (result && result.value === 'true');
     } catch (error) {
       console.error('[UpdateManager] 读取离线模式失败:', error);
@@ -119,9 +114,7 @@ class UpdateManager {
   // 判断是否应该检查更新
   async shouldCheckUpdate() {
     try {
-      const result = await storage.get({
-        key: CONFIG.STORAGE_KEYS.LAST_UPDATE_CHECK_TIME
-      });
+      const result = await storageGet(CONFIG.STORAGE_KEYS.LAST_UPDATE_CHECK_TIME);
       
       if (!result || !result.value) {
         return true; // 从未检查过
@@ -141,10 +134,7 @@ class UpdateManager {
   // 记录更新检查时间
   async recordUpdateCheck() {
     try {
-      await storage.set({
-        key: CONFIG.STORAGE_KEYS.LAST_UPDATE_CHECK_TIME,
-        value: new Date().toISOString()
-      });
+      await storageSet(CONFIG.STORAGE_KEYS.LAST_UPDATE_CHECK_TIME, new Date().toISOString());
     } catch (error) {
       console.error('记录更新时间失败:', error);
     }
@@ -153,10 +143,7 @@ class UpdateManager {
   // 保存更新信息到本地存储
   async saveUpdateInfo(updateInfo) {
     try {
-      await storage.set({
-        key: CONFIG.STORAGE_KEYS.CACHED_UPDATE_INFO,
-        value: JSON.stringify(updateInfo)
-      });
+      await storageSet(CONFIG.STORAGE_KEYS.CACHED_UPDATE_INFO, JSON.stringify(updateInfo));
       console.log('[UpdateManager] Saved update info to storage');
     } catch (error) {
       console.error('保存更新信息失败:', error);
@@ -166,9 +153,7 @@ class UpdateManager {
   // 从本地存储获取更新信息
   async getSavedUpdateInfo() {
     try {
-      const result = await storage.get({
-        key: CONFIG.STORAGE_KEYS.CACHED_UPDATE_INFO
-      });
+      const result = await storageGet(CONFIG.STORAGE_KEYS.CACHED_UPDATE_INFO);
       
       if (result && result.value) {
         console.log('[UpdateManager] Retrieved update info from storage');
@@ -191,10 +176,7 @@ class UpdateManager {
   // 忽略某个版本
   async ignoreVersion(versionCode) {
     try {
-      await storage.set({
-        key: CONFIG.STORAGE_KEYS.IGNORED_VERSION,
-        value: versionCode.toString()
-      });
+      await storageSet(CONFIG.STORAGE_KEYS.IGNORED_VERSION, versionCode.toString());
     } catch (error) {
       console.error('忽略版本失败:', error);
     }
@@ -203,9 +185,7 @@ class UpdateManager {
   // 检查是否忽略某个版本
   async isVersionIgnored(versionCode) {
     try {
-      const result = await storage.get({
-        key: CONFIG.STORAGE_KEYS.IGNORED_VERSION
-      });
+      const result = await storageGet(CONFIG.STORAGE_KEYS.IGNORED_VERSION);
       
       if (result && result.value) {
         return parseInt(result.value) === versionCode;
@@ -220,29 +200,9 @@ class UpdateManager {
   
   // 显示更新对话框（示例）
   async showUpdateDialog(updateInfo, isForceUpdate = false) {
-    return new Promise((resolve) => {
-      if (isForceUpdate) {
-        // 强制更新，直接跳转到强制更新页面
-        router.push({
-          uri: '/force-update',
-          params: {
-            updateInfo: updateInfo,
-            isForceUpdate: true
-          }
-        });
-        resolve('force_update');
-        return;
-      }
-      
-      // 非强制更新，跳转到普通更新页面
-      router.push({
-        uri: '/update',
-        params: {
-          updateInfo: updateInfo,
-          isForceUpdate: false
-        }
-      });
-      resolve('normal_update');
+    return Promise.resolve({
+      action: isForceUpdate ? 'force_update' : 'normal_update',
+      updateInfo
     });
   }
   
@@ -271,16 +231,7 @@ class UpdateManager {
         if (isForceUpdate) {
           // 标记需要强制更新
           await this.markForceUpdateRequired();
-          
-          // 跳转到强制更新页面（用户无法返回）
-          router.push({
-            uri: '/force-update',
-            params: {
-              updateInfo: result.updateInfo,
-              isForceUpdate: true
-            }
-          });
-          
+
           return {
             hasForceUpdate: true,
             updateInfo: result.updateInfo
@@ -304,10 +255,7 @@ class UpdateManager {
   // 标记需要强制更新
   async markForceUpdateRequired() {
     try {
-      await storage.set({
-        key: CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED,
-        value: 'true'
-      });
+      await storageSet(CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED, 'true');
     } catch (error) {
       console.error('标记强制更新失败:', error);
     }
@@ -316,9 +264,7 @@ class UpdateManager {
   // 清除强制更新标记
   async clearForceUpdateMark() {
     try {
-      await storage.delete({
-        key: CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED
-      });
+      await storageDelete(CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED);
     } catch (error) {
       console.error('清除强制更新标记失败:', error);
     }
@@ -327,9 +273,7 @@ class UpdateManager {
   // 检查是否需要强制更新
   async isForceUpdateRequired() {
     try {
-      const result = await storage.get({
-        key: CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED
-      });
+      const result = await storageGet(CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED);
       
       return result && result.value === 'true';
     } catch (error) {
@@ -341,17 +285,9 @@ class UpdateManager {
   // 清除更新缓存
   async clearUpdateCache() {
     try {
-      await storage.delete({
-        key: CONFIG.STORAGE_KEYS.CACHED_UPDATE_INFO
-      });
-      
-      await storage.delete({
-        key: CONFIG.STORAGE_KEYS.IGNORED_VERSION
-      });
-      
-      await storage.delete({
-        key: CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED
-      });
+      await storageDelete(CONFIG.STORAGE_KEYS.CACHED_UPDATE_INFO);
+      await storageDelete(CONFIG.STORAGE_KEYS.IGNORED_VERSION);
+      await storageDelete(CONFIG.STORAGE_KEYS.FORCE_UPDATE_REQUIRED);
       
       console.log('[UpdateManager] Cleared update cache');
     } catch (error) {
