@@ -19,10 +19,10 @@
       <div class="page-content">
         <div class="content-container">
           <div class="current-name-section">
-            <text>当前名字: {{ currentPetName }}</text>
+            <text class="current-name-text">当前名字: {{ currentPetName }}</text>
           </div>
           <div class="name-input" onclick="toggleKeyboard(true)">
-            <text>{{ newPetName || '点击输入新名字' }}</text>
+            <text class="name-input-text">{{ newPetName || '点击输入新名字' }}</text>
             <div class="cursor" if="{{!newPetName}}"></div>
           </div>
           <image src="../common/check.png" class="confirm-button" onclick="savePetName"></image>
@@ -58,7 +58,6 @@
     right: 10px;
     width: 80px;
     height: 80px;
-    z-index: 100;
   }
   .page-header-container {
     width: 100%;
@@ -98,11 +97,11 @@
     width: 100%;
     flex: 1; /* Take up remaining vertical space */
     align-items: center;
-    overflow-y: scroll; /* Allow content to scroll */
+    overflow: scroll; /* Allow content to scroll */
   }
   .content-container { flex-direction: column; align-items: center; }
   .current-name-section { flex-direction: column; align-items: center; margin-bottom: 30px; }
-  .current-name-section text { color: #AAA; font-size: 28px; margin-bottom: 10px; }
+  .current-name-text { color: #AAA; font-size: 28px; margin-bottom: 10px; }
   .name-input { 
     width: 90%; 
     height: 70px; 
@@ -114,7 +113,7 @@
     margin-bottom: 40px; 
     position: relative;
   }
-  .name-input text { color: #FFF; font-size: 32px; }
+  .name-input-text { color: #FFF; font-size: 32px; }
   .cursor {
     width: 4px;
     height: 40px;
@@ -133,11 +132,11 @@
 
 <script>
     import router from '@system.router';
-    import storage from '@system.storage';
     import prompt from '@system.prompt';
     import ApiService from '../common/js/api-service.js';
     import UserService from '../common/js/userService.js';
     import { CONFIG } from '../common/js/config.js';
+    import { getStorageValue, setStorageValue } from '../common/js/storage-utils.js';
 
     export default {
       data: {
@@ -146,15 +145,17 @@
         newPetName: '',
         statusMessage: '',
         showKeyboard: false,
-        maxNameLength: 10 // Max length for the pet name
+        maxNameLength: 10, // Max length for the pet name
+        timeInterval: null,
+        navigateBackTimeout: null
       },
       async onInit() {
         this.updateTime();
-        setInterval(this.updateTime, 10000);
+        this.timeInterval = setInterval(this.updateTime, 10000);
   
         // Attempt to load current name for display purposes only
         try {
-          const userInfoJSON = await storage.get({ key: CONFIG.STORAGE_KEYS.USER_INFO });
+          const userInfoJSON = await getStorageValue(CONFIG.STORAGE_KEYS.USER_INFO);
           if (userInfoJSON) {
             const userInfo = JSON.parse(userInfoJSON);
             this.currentPetName = userInfo.pet_name || '未命名';
@@ -218,15 +219,13 @@
           this.statusMessage = '';
   
           const updatedUserInfo = { ...userInfo, pet_name: this.currentPetName };
-          await storage.set({
-            key: CONFIG.STORAGE_KEYS.USER_INFO,
-            value: JSON.stringify(updatedUserInfo)
-          });
+          await setStorageValue(CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(updatedUserInfo));
   
           prompt.showToast({ message: '宠物名字已更新！' });
           this.toggleKeyboard(false); // Hide keyboard on success
-          setTimeout(() => {
+          this.navigateBackTimeout = setTimeout(() => {
             router.back();
+            this.navigateBackTimeout = null;
           }, 1500);
   
         } else {
@@ -238,6 +237,16 @@
           this.toggleKeyboard(false);
         } else {
           router.back();
+        }
+      },
+      onDestroy() {
+        if (this.timeInterval) {
+          clearInterval(this.timeInterval);
+          this.timeInterval = null;
+        }
+        if (this.navigateBackTimeout) {
+          clearTimeout(this.navigateBackTimeout);
+          this.navigateBackTimeout = null;
         }
       }
     }

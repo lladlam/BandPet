@@ -109,11 +109,12 @@
       time: '00:00',
       title: '',
       body: '',
-      creation_date: ''
+      creation_date: '',
+      timeInterval: null
     },
     onInit() {
       this.updateTime();
-      setInterval(this.updateTime, 10000);
+      this.timeInterval = setInterval(this.updateTime, 10000);
     },
     onShow() {
       // Logic moved to onShow, as router params are guaranteed to be available here.
@@ -151,6 +152,12 @@
     },
     goBack() {
       router.back();
+    },
+    onDestroy() {
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
+      }
     }
   }
 </script>

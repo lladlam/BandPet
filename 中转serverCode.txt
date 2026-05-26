@@ -1,0 +1,322 @@
+BandPet Node.js 中转服务器代码
+
+用途：
+1. 手环端请求 http://mkyun.lladlam.top:7718/api
+2. 中转服务器把原始 JSON 请求转发到 Supabase Edge Function
+3. 中转服务器把 Supabase 响应统一整理为 application/json 后返回给手环端
+
+目录结构：
+
+bandpet-relay-server/
+  package.json
+  server.js
+  .env
+
+==============================
+package.json
+==============================
+
+{
+  "name": "bandpet-relay-server",
+  "version": "0.4.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
+==============================
+.env 示例
+==============================
+
+PORT=7718
+HOST=0.0.0.0
+SUPABASE_FUNCTION_URL=https://YOUR_PROJECT.supabase.co/functions/v1/bright-responder
+SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+UPSTREAM_TIMEOUT_MS=15000
+
+说明：
+- SUPABASE_FUNCTION_URL 改成你的 Supabase Edge Function 地址。
+- SUPABASE_ANON_KEY 如果你的 Edge Function 不需要 JWT，也建议保留 anon key 作为 apikey/Authorization 转发。
+- server.js 会自动读取同目录 .env；改完 .env 后需要重启服务。
+- mkyun.lladlam.top 的防火墙和安全组需要放行 TCP 7718。
+
+==============================
+server.js
+==============================
+
+import http from 'node:http';
+import { URL } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
+
+loadEnvFile();
+
+const PORT = Number(process.env.PORT || 7718);
+const HOST = process.env.HOST || '0.0.0.0';
+const SUPABASE_FUNCTION_URL = process.env.SUPABASE_FUNCTION_URL || '';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || '';
+const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_TIMEOUT_MS || 15000);
+const MAX_BODY_BYTES = 1024 * 1024;
+
+function loadEnvFile() {
+  const envPath = path.resolve(process.cwd(), '.env');
+  if (!fs.existsSync(envPath)) return;
+
+  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const equalsIndex = trimmed.indexOf('=');
+    if (equalsIndex === -1) continue;
+
+    const key = trimmed.slice(0, equalsIndex).trim();
+    let value = trimmed.slice(equalsIndex + 1).trim();
+
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS, GET'
+};
+
+function sendJson(res, statusCode, payload, extraHeaders = {}) {
+  const body = JSON.stringify(payload);
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    ...corsHeaders,
+    ...extraHeaders
+  });
+  res.end(body);
+}
+
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        reject(new Error('Request body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+
+    req.on('end', () => {
+      resolve(Buffer.concat(chunks).toString('utf8'));
+    });
+
+    req.on('error', reject);
+  });
+}
+
+function parseJsonBody(rawBody) {
+  if (!rawBody) return {};
+
+  try {
+    return JSON.parse(rawBody);
+  } catch (error) {
+    const err = new Error('Invalid JSON body');
+    err.cause = error;
+    throw err;
+  }
+}
+
+async function fetchSupabaseFunction(requestData) {
+  if (!SUPABASE_FUNCTION_URL) {
+    return {
+      status: 500,
+      data: {
+        success: false,
+        error: 'relay_not_configured',
+        message: 'SUPABASE_FUNCTION_URL is not configured'
+      }
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
+
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+
+  if (SUPABASE_ANON_KEY) {
+    headers.apikey = SUPABASE_ANON_KEY;
+    headers.Authorization = `Bearer ${SUPABASE_ANON_KEY}`;
+  }
+
+  try {
+    const upstreamResponse = await fetch(SUPABASE_FUNCTION_URL, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(requestData),
+      signal: controller.signal
+    });
+
+    const rawText = await upstreamResponse.text();
+    let data;
+
+    try {
+      data = rawText ? JSON.parse(rawText) : {};
+    } catch (error) {
+      data = {
+        success: false,
+        error: 'invalid_upstream_json',
+        message: 'Supabase returned non-JSON data',
+        raw: rawText.slice(0, 500)
+      };
+    }
+
+    return {
+      status: upstreamResponse.status,
+      data: normalizeBraceletJson(data)
+    };
+  } catch (error) {
+    const isTimeout = error && error.name === 'AbortError';
+    return {
+      status: 502,
+      data: {
+        success: false,
+        error: isTimeout ? 'upstream_timeout' : 'upstream_request_failed',
+        message: isTimeout ? 'Supabase request timed out' : error.message
+      }
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function normalizeBraceletJson(data) {
+  if (data === null || data === undefined) {
+    return {
+      success: false,
+      error: 'empty_upstream_response',
+      message: 'Supabase returned empty response'
+    };
+  }
+
+  if (typeof data !== 'object' || Array.isArray(data)) {
+    return {
+      success: true,
+      data
+    };
+  }
+
+  return data;
+}
+
+async function handleApi(req, res) {
+  let requestData;
+
+  try {
+    const rawBody = await readRequestBody(req);
+    requestData = parseJsonBody(rawBody);
+  } catch (error) {
+    sendJson(res, 400, {
+      success: false,
+      error: 'bad_request',
+      message: error.message
+    });
+    return;
+  }
+
+  if (!requestData.action) {
+    sendJson(res, 400, {
+      success: false,
+      error: 'missing_action',
+      message: 'action is required'
+    });
+    return;
+  }
+
+  const upstreamResult = await fetchSupabaseFunction(requestData);
+  sendJson(res, upstreamResult.status, upstreamResult.data);
+}
+
+const server = http.createServer(async (req, res) => {
+  const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, corsHeaders);
+    res.end();
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/health') {
+    sendJson(res, 200, {
+      success: true,
+      name: 'bandpet-relay-server',
+      port: PORT,
+      upstreamConfigured: Boolean(SUPABASE_FUNCTION_URL)
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api') {
+    await handleApi(req, res);
+    return;
+  }
+
+  sendJson(res, 404, {
+    success: false,
+    error: 'not_found',
+    message: 'Use POST /api'
+  });
+});
+
+server.on('clientError', (error, socket) => {
+  socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+});
+
+server.listen(PORT, HOST, () => {
+  console.log(`BandPet relay server listening on http://${HOST}:${PORT}`);
+});
+
+==============================
+运行命令
+==============================
+
+npm install
+npm run start
+
+如果 /health 返回 "upstreamConfigured": false，说明服务没有读到 SUPABASE_FUNCTION_URL。
+请确认 .env 和 server.js 在同一个目录，并重启服务：
+
+npm run start
+
+后台运行示例：
+
+npm run start > bandpet-relay.log 2>&1 &
+
+健康检查：
+
+curl http://mkyun.lladlam.top:7718/health
+
+接口测试：
+
+curl -X POST http://mkyun.lladlam.top:7718/api \
+  -H "Content-Type: application/json" \
+  -d "{\"action\":\"get_rankings\",\"limit\":10}"

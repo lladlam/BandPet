@@ -82,7 +82,7 @@
     width: 100%;
     flex: 1; /* Take up remaining vertical space */
     align-items: center;
-    overflow-y: scroll; /* Allow content to scroll */
+    overflow: scroll; /* Allow content to scroll */
   }
   .leaderboard-list {
     width: 90%;
@@ -141,11 +141,12 @@
     data: {
       time: '00:00',
       rankings: [],
-      statusMessage: '正在加载...'
+      statusMessage: '正在加载...',
+      timeInterval: null
     },
     onInit() {
       this.updateTime();
-      setInterval(this.updateTime, 10000);
+      this.timeInterval = setInterval(this.updateTime, 10000);
       this.fetchRankings();
     },
     updateTime() {
@@ -155,18 +156,13 @@
       this.time = `${hours}:${minutes}`;
     },
     async fetchRankings() {
-      console.log('[Leaderboard] Fetching rankings...');
       const result = await ApiService.getRankings();
-      
-      console.log('[Leaderboard] API Response:', JSON.stringify(result));
 
       if (result.success && result.rankings.length > 0) {
         this.rankings = result.rankings;
         this.statusMessage = ''; // Clear status on success
-        console.log(`[Leaderboard] Successfully loaded ${result.rankings.length} ranking entries.`);
       } else if (result.success && result.rankings.length === 0) {
         this.statusMessage = '排行榜上还没有人，快去点击吧！';
-        console.log('[Leaderboard] API returned success with 0 rankings.');
       } else {
         console.error("[Leaderboard] Failed to fetch rankings:", result.error);
         this.statusMessage = '无法加载排行榜，请稍后重试。';
@@ -174,6 +170,12 @@
     },
     goBack() {
       router.back();
+    },
+    onDestroy() {
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
+      }
     }
   }
 </script>

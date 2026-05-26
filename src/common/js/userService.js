@@ -1,8 +1,8 @@
 // src/common/js/userService.js
 import device from '@system.device';
-import storage from '@system.storage';
 import ApiService from './api-service.js';
 import { CONFIG } from './config.js';
+import { getStorageValue, setStorageValue } from './storage-utils.js';
 
 /**
  * A service to handle silent user registration and data retrieval.
@@ -15,13 +15,7 @@ class UserService {
    * @returns {Promise<any>} The value from storage, or null if not found.
    */
   _storageGet(key) {
-    return new Promise((resolve) => {
-      storage.get({
-        key: key,
-        success: (data) => resolve(data),
-        fail: () => resolve(null),
-      });
-    });
+    return getStorageValue(key);
   }
 
   /**
@@ -31,14 +25,7 @@ class UserService {
    * @returns {Promise<void>}
    */
   _storageSet(key, value) {
-    return new Promise((resolve, reject) => {
-      storage.set({
-        key: key,
-        value: value,
-        success: resolve,
-        fail: (err, code) => reject(new Error(`Storage.set failed for '${key}': ${err} (${code})`)),
-      });
-    });
+    return setStorageValue(key, value);
   }
 
   /**
@@ -61,7 +48,6 @@ class UserService {
         success: async (data) => {
           let serial = data ? data.serial : null;
           if (serial === 'NA') {
-            console.warn("Device serial is 'NA', using a fixed test serial.");
             serial = 'TESTVM-SN-0123456789';
           }
 
@@ -74,7 +60,6 @@ class UserService {
           try {
             // Save the raw ID for other services that might need it (e.g., API calls)
             await this._storageSet(CONFIG.STORAGE_KEYS.DEVICE_ID, serial);
-            console.log('Saved raw device ID:', serial);
             resolve(serial);
           } catch (e) {
             console.error('Failed to save raw device ID to storage:', e);
@@ -107,7 +92,6 @@ class UserService {
     };
 
     await this._storageSet(CONFIG.STORAGE_KEYS.USER_INFO, JSON.stringify(userInfoToSave));
-    console.log("Successfully saved user info to storage:", userInfoToSave);
     return userInfoToSave;
   }
 
@@ -119,7 +103,6 @@ class UserService {
    */
   async ensureUserIsRegistered(forceSync = false) {
     // 1. Check if user info already exists and is valid.
-    console.log('[UserService] Checking for existing user info in storage...');
     const existingUserInfoJSON = await this._storageGet(CONFIG.STORAGE_KEYS.USER_INFO);
     if (existingUserInfoJSON) {
       try {
@@ -128,18 +111,14 @@ class UserService {
           if (forceSync) {
             const offlineModeEnabled = await this._isOfflineModeEnabled();
             if (offlineModeEnabled) {
-              console.log('[UserService] Offline mode enabled, skipping force sync and using local data.');
               return userInfo;
             }
 
-            console.log('[UserService] Force sync enabled. Attempting to sync latest data from server...');
             try {
               const syncResult = await ApiService.syncFromServer(userInfo.id);
               if (syncResult && syncResult.success) {
-                console.log('[UserService] Successfully synced from server.');
                 return await this._saveUserInfo(syncResult.userInfo);
               } else {
-                console.warn('[UserService] Sync from server failed, will use stale local data. Error:', syncResult ? syncResult.error : 'Unknown error');
                 return userInfo; // Return stale data if sync fails
               }
             } catch (syncError) {
@@ -147,23 +126,18 @@ class UserService {
               return userInfo; // Return stale data on critical sync failure
             }
           } else {
-            console.log('[UserService] User is already registered. Found info:', userInfo);
             return userInfo;
           }
         }
       } catch (e) {
         // Malformed JSON, proceed with registration.
-        console.warn('[UserService] User info in storage is malformed. Proceeding with registration.');
       }
     }
 
     const offlineModeEnabled = await this._isOfflineModeEnabled();
     if (offlineModeEnabled) {
-      console.warn('[UserService] Offline mode enabled and no local user info found. Skipping network registration.');
       return null;
     }
-
-    console.log('[UserService] User not found locally. Starting silent registration process...');
 
     // 2. Get Device ID
     const deviceId = await this._getRawDeviceId();
@@ -171,29 +145,20 @@ class UserService {
       console.error('[UserService] CRITICAL: Cannot proceed with registration: failed to get device ID.');
       return null;
     }
-    console.log(`[UserService] Got device ID: ${deviceId}`);
 
     try {
       // 3. Check if the device is already registered on the server
-      console.log('[UserService] Checking device registration with server...');
       const regResult = await ApiService.checkDeviceRegistration(deviceId);
-      console.log('[UserService] Server registration check response:', JSON.stringify(regResult));
-
 
       if (regResult && regResult.is_registered && regResult.userInfo) {
         // Device is known, save the info and we're done.
-        console.log('[UserService] Device is already registered on server. Restoring user info.');
         return await this._saveUserInfo(regResult.userInfo);
       }
       
       // 4. If not registered, create a new user record.
-      console.log('[UserService] Device not registered. Attempting to register a new user...');
       const newRegResult = await ApiService.registerAndGetUserId(deviceId);
-      console.log('[UserService] Server new user registration response:', JSON.stringify(newRegResult));
-
 
       if (newRegResult && newRegResult.success && newRegResult.userInfo) {
-        console.log('[UserService] Successfully registered new user.');
         return await this._saveUserInfo(newRegResult.userInfo);
       } else {
         console.error('[UserService] CRITICAL: Failed to register new user.', newRegResult ? newRegResult.message : 'No result from server');
@@ -213,7 +178,6 @@ class UserService {
    */
   async updatePendingClicks(amount) {
     if (typeof amount !== 'number' || isNaN(amount)) {
-      console.warn('[UserService] updatePendingClicks received an invalid amount:', amount);
       return null;
     }
 
@@ -224,8 +188,6 @@ class UserService {
       const newClicks = currentClicks + amount;
       
       await this._storageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, newClicks.toString());
-      
-      console.log(`[UserService] Pending clicks updated by ${amount}. New value: ${newClicks}`);
       return newClicks;
     } catch (e) {
       console.error('[UserService] Failed to update pending clicks in storage:', e);
@@ -239,17 +201,13 @@ class UserService {
    * @returns {Promise<boolean>} True on success, false on failure or if no sync was needed.
    */
   async triggerClickSync() {
-    console.log('[UserService] Triggering click sync...');
-
     if (await this._isOfflineModeEnabled()) {
-      console.log('[UserService] Offline mode enabled, skipping click sync.');
       return false;
     }
     
     // 1. Get user info
     const userInfoJSON = await this._storageGet(CONFIG.STORAGE_KEYS.USER_INFO);
     if (!userInfoJSON) {
-      console.warn('[UserService] Sync aborted: User info not found in storage.');
       return false;
     }
     
@@ -257,11 +215,9 @@ class UserService {
     try {
       userInfo = JSON.parse(userInfoJSON);
       if (!userInfo || !userInfo.id) {
-        console.warn('[UserService] Sync aborted: User ID is invalid.');
         return false;
       }
     } catch(e) {
-      console.warn('[UserService] Sync aborted: Could not parse user info.');
       return false;
     }
 
@@ -270,28 +226,21 @@ class UserService {
     const clicksToSync = parseInt(pendingClicksData);
 
     if (isNaN(clicksToSync)) {
-      console.log('[UserService] No pending clicks to sync (value is NaN).');
       return true; // Nothing to do, so it's a "success"
     }
-
-    console.log(`[UserService] Found ${clicksToSync} pending clicks for user ${userInfo.id}. Syncing...`);
 
     // 3. Call API
     const result = await ApiService.syncClicks(userInfo.id, clicksToSync);
 
     // 4. Update storage on success
     if (result.success) {
-      console.log('[UserService] Sync successful.');
-      
       // 【修复】同步成功后，先把待上传数量加到本地总点击数，再清空待上传
       const currentTotalClicks = parseInt(await this._storageGet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS)) || 0;
       const updatedTotalClicks = currentTotalClicks + clicksToSync;
       await this._storageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, updatedTotalClicks.toString());
-      console.log(`[UserService] Added pending clicks to total: ${currentTotalClicks} + ${clicksToSync} = ${updatedTotalClicks}`);
       
       // 清空待上传数量
       await this._storageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, '0');
-      console.log('[UserService] Resetting pending clicks to 0');
       
       return true;
     } else {
@@ -306,17 +255,13 @@ class UserService {
    * @returns {Promise<{success: boolean, message: string}>}
    */
   async forceSyncFromServer() {
-    console.log('[UserService] Starting force sync from server...');
-
     if (await this._isOfflineModeEnabled()) {
       const msg = '离线模式已开启，请关闭离线模式后再同步。';
-      console.warn(`[UserService] ${msg}`);
       return { success: false, message: msg };
     }
     
     try {
       // 1. Force a sync of any pending clicks FIRST.
-      console.log('[UserService] Step 1: Syncing local pending clicks before fetching server data.');
       const clickSyncSuccess = await this.triggerClickSync();
 
       if (!clickSyncSuccess) {
@@ -326,23 +271,16 @@ class UserService {
         console.error(`[UserService] ${errorMsg}`);
         return { success: false, message: errorMsg };
       }
-      console.log('[UserService] Step 1: Local pending clicks synced successfully.');
-
 
       // 2. Now, run the full get/register user flow to get the latest state from the server.
-      console.log('[UserService] Step 2: Fetching latest user data from server.');
       const userInfo = await this.ensureUserIsRegistered(true);
 
       if (userInfo && userInfo.id) {
-        console.log('[UserService] Step 2: Successfully fetched and updated user info. UserInfo:', userInfo);
-        
         // 【修复】同步成功后，将服务器的 total_clicks 覆盖到本地
         if (userInfo.total_clicks !== undefined) {
           await this._storageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, userInfo.total_clicks.toString());
-          console.log(`[UserService] Updated local total_clicks to server value: ${userInfo.total_clicks}`);
         }
         
-        console.log('[UserService] Force sync complete. Local storage is now up-to-date.');
         return { success: true, message: '同步成功！' };
       } else {
         const errorMsg = '无法从服务器获取最新用户数据。';

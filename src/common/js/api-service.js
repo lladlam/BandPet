@@ -1,8 +1,5 @@
 // api-service.js
 import fetch from '@system.fetch';
-import router from '@system.router';
-import storage from '@system.storage';
-import prompt from '@system.prompt';
 import { CONFIG } from './config.js';
 
 class ApiService {
@@ -91,7 +88,6 @@ class ApiService {
       });
       
       if (result && result.success) {
-        console.log('从服务器同步数据成功:', result.userInfo);
         return { success: true, userInfo: result.userInfo };
       } else {
         console.error('同步数据失败:', result ? result.error : '未知错误');
@@ -136,7 +132,6 @@ class ApiService {
       const result = await this.request('check_registration', {
         device_id: deviceId
       });
-      console.log('预激活检查成功:', result);
       // 直接返回服务器的原始响应，UI层期望的是扁平结构
       return result;
     } catch (error) {
@@ -166,7 +161,6 @@ class ApiService {
       const result = await this.request('get_announcements', {
         limit: limit
       });
-      console.log('Original announcement result from server:', JSON.stringify(result));
       
       return {
         success: result.success || false,
@@ -188,17 +182,10 @@ class ApiService {
 
   // 检查应用更新
   async checkAppUpdate(currentVersionCode) {
-    console.log('[ApiService] checkAppUpdate called with currentVersionCode:', currentVersionCode);
-    
     try {
       const result = await this.request('check_update', {
         current_version_code: currentVersionCode
       });
-      
-      console.log('[ApiService] checkAppUpdate raw result:', JSON.stringify(result));
-      console.log('[ApiService] checkAppUpdate has_update:', result.has_update);
-      console.log('[ApiService] checkAppUpdate update_info:', JSON.stringify(result.update_info));
-      console.log('[ApiService] checkAppUpdate is_force_update:', result.is_force_update);
       
       // 确保 updateInfo 包含所有必要字段
       let updateInfo = null;
@@ -213,9 +200,6 @@ class ApiService {
           min_required_version: result.update_info.min_required_version || 0,
           release_time: result.update_info.release_time || ''
         };
-        console.log('[ApiService] checkAppUpdate updateInfo constructed:', JSON.stringify(updateInfo));
-      } else {
-        console.log('[ApiService] checkAppUpdate update_info is null or undefined');
       }
       
       const returnResult = {
@@ -227,9 +211,7 @@ class ApiService {
         latestVersionCode: result.latest_version_code || currentVersionCode,
         error: result.error
       };
-      
-      console.log('[ApiService] checkAppUpdate return result:', JSON.stringify(returnResult));
-      
+
       return returnResult;
     } catch (error) {
       console.error('[ApiService] checkAppUpdate error:', error);

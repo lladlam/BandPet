@@ -1,60 +1,64 @@
-**项目概览**
-- **类型**: 快应用 / AIoT（使用 `aiot-toolkit`）。源码位于 `src/`，构建产物在 `dist/`，发布使用 `aiot release`。
-- **目标设备**: 智能手表（见 [src/manifest.json](src/manifest.json) -> `deviceTypeList: ["watch"]`）。
+# Vela 快应用开发
 
-**大体架构与数据流（要点）**
-- 路由/页面：由 [src/manifest.json](src/manifest.json) 管理，入口 `main`，每个页面由 `src/<page>/index.ux` 提供视图与页面逻辑。
-- 共享模块：`src/common/js/` 包含 `api-service.js`（网络层）、`config.js`（常量/存储键）、`auth.js`/`auth-guard.js`（鉴权相关）。所有后端交互通过 `ApiService` 封装。
-- 平台能力：大量使用平台系统模块（`@system.fetch`, `@system.storage`, `@system.prompt`, `@system.router` 等），这些调用在 `src/common/js/api-service.js` 和页面脚本中较常见，注意回调/responseType 的平台差异。
-- 关键数据流：点击计数在客户端累积（`PENDING_CLICKS`），每隔固定间隔或达到批次数量通过 `ApiService.syncClicks()` 上报；排行榜、命名等由后端函数（Supabase functions）提供。
+## 触发条件
 
-**UI / 功能规范（来自 `BandPet.txt`）**
-- 主界面：纯黑背景，顶部显示时间，中间是宠物名占位符，点击宠物增加点击数；底部左侧更多按钮、右侧胶囊按钮显示点击数。
-- 定时与上报：点击数应每隔 5 分钟上报服务器（参考 `api-service.js` 的 `syncClicks` 逻辑与 `config.js` 中的 `SYNC_INTERVAL`）。
-- 页面集合：`more`, `leaderboard`, `exchange`, `market`, `customize`, `settings`, `activate`, `about`, `naming`；各页面在 `src/` 下有对应的 `index.ux`。
-- 激活流程与设备码：`BandPet.txt` 中包含设备码与激活码算法说明（在仓库根 `BandPet.txt`），对接激活逻辑时请参照该文件实现校验规则并在 `src/activate/index.ux` 中保持一致。
-- 输入法：若需键盘调用，请查看 `src/InputMethod/` 下相关资源与 README（仓库内有数字键盘和 QWERTY 代码）。
+当用户消息中包含以下关键词时，**立即自动启动工作流**，无需用户手动引用任何文件：
+- 创建 Vela 快应用 / 创建 Vela 应用
+- 创建小米手表快应用 / 创建小米手表应用
+- Vela 快应用 / vela app / vela quickapp
+- 小米快应用 / 小米穿戴应用
 
-**开发与调试（具体命令）**
-- 本地热重载：
-```bash
-npm run start
+---
+
+## 工程体系架构（Harness Engineering）
+
 ```
-- 构建产物：
-```bash
-npm run build
+.github/
+├── rules/               ← 编译时约束（alwaysApply，AI 无条件遵守）
+│   ├── vela-platform.md       # 平台约束：组件+API+禁止依赖+生命周期
+│   ├── vela-format.md         # 格式规范：.ux+manifest+package.json+目录结构
+│   ├── vela-layout.md         # 布局规范：CSS+圆屏安全区域
+│   ├── vela-quality.md        # 质量标准：命名+错误处理+资源清理+禁止行为
+│   └── project-init.md        # 初始化规范：脚手架命令+检查清单
+├── agents/              ← 运行时行为体（纯流程编排，rules 自动注入约束）
+│   ├── vela-workflow.agent.md    # 工作流协调器
+│   ├── vela-s1-prd.agent.md      # S1 PRD 生成
+│   ├── vela-s2-tech.agent.md     # S2 技术方案
+│   ├── vela-s3-coding.agent.md   # S3 代码生成
+│   └── vela-knowledge.agent.md   # 知识库查询
+└── prompts/             ← 知识参考层（按需加载）
+    ├── vela-dev-guide.prompt.md       # 完整开发指南
+    ├── vela-components.prompt.md      # 组件用法速查
+    ├── vela-apis.prompt.md            # API 速查
+    └── vela-best-practices.prompt.md  # 最佳实践
 ```
-- 发布：
-```bash
-npm run release
-```
-- 代码风格：
-```bash
-npm run lint
-```
 
-**项目约定与给 AI Agent 的具体指导**
-- 永远修改 `src/` 下源码，**不要**直接编辑 `dist/`（它们是构建产物）。
-- 所有后端 URL 与函数名位置经常变更。AI Agent 在修改或生成与网络相关的补丁时**必须**直接读取并参考 `src/common/js/api-service.js`（或仓库中任何网络配置模块），不要把本文档中的示例硬编码值当作准确配置。若需要将 base URL 抽出为可配置常量，请先在代码中创建或更新网络配置（例如 `src/common/js/network-config.js` 或在 `api-service.js` 顶部声明常量），并在提交说明中记录变更原因与影响范围。
-- 所有存储键和全局常量应写入 `src/common/js/config.js`（示例：`STORAGE_KEYS.PENDING_CLICKS`），不要在代码中散落字符串常量。
-- 点击上报策略：遵循 `config.js` 中 `MAX_CLICKS_PER_BATCH` 与 `SYNC_INTERVAL`，实现时避免频繁写 `@system.storage`，先在内存或临时对象累积再批量写入。
-- UI 修改：页面文件均为 `*.ux`，样式与布局务必保持深色/极简（参见 `BandPet.txt` 的视觉规范）。
+### 设计原则
 
-**关键文件速查**
-- `BandPet.txt`：仓库根的游戏说明与激活算法（必读，激活/设备码逻辑来源）
-- `src/manifest.json`：路由与权限声明
-- `src/common/js/api-service.js`：网络层、Supabase functions 调用样例
-- `src/common/js/config.js`：共享常量与存储键
-- `src/app.ux`：全局生命周期钩子（错误与日志集中点）
+| 层级 | 职责 | 加载方式 | 特点 |
+|------|------|----------|------|
+| **Rules** | 硬约束（什么不能做） | alwaysApply，自动注入 | 不可协商、可验证 |
+| **Agents** | 流程编排（怎么做） | 按任务 handoff 调度 | 关注行为序列 |
+| **Prompts** | 知识参考（做得好） | 按需引用 | 详细文档、示例 |
 
-**交流偏好**
-- 请用中文与我对话；对不确定的实现细节我会先提出假设并请求确认。
+### 核心约束（由 Rules 层自动执行）
 
-**参考文档及自助诊断（必须先读）**
-- 仓库包含官方 Vela 文档副本，AI agent 在不确定平台 API、构建流程或遇到错误时**必须优先阅读**这些文档再提问或修改代码：
-	- [VelaDocs/VelaDocs-main/docs/zh](VelaDocs/VelaDocs-main/docs/zh)（中文）
-	- [VelaDocs/VelaDocs-main/docs/en](VelaDocs/VelaDocs-main/docs/en)（英文）
-- 推荐查阅的主题：`system`（平台能力）、`network`（fetch/请求格式）、`devicedebug`（设备调试/模拟器）、`release`（打包与发布）、`tools/debug`（本地调试工具）。
-- 如果在运行或修改中遇到与平台相关的异常（例如 `fetch` 返回结构差异、权限问题、模拟器差异），先在 VelaDocs 中搜索相关条目并在补丁说明中引用具体文档页再继续实施更改。
+- 📌 组件白名单 + API 白名单 → `rules/vela-platform.md`
+- 📌 .ux 格式 + manifest + package.json → `rules/vela-format.md`
+- 📌 Flexbox 布局 + 圆屏安全区域 → `rules/vela-layout.md`
+- 📌 命名规范 + 错误处理 + 资源清理 → `rules/vela-quality.md`
+- 📌 脚手架初始化 + 禁止行为清单 → `rules/project-init.md`
 
+---
 
+## 自定义 Agent
+
+可在 VS Code Copilot Chat 的 Agent 下拉菜单中选择：
+
+| Agent | 用途 |
+|-------|------|
+| `Vela 快应用工作流` | 完整三阶段工作流协调器（PRD → 技术方案 → 代码） |
+| `Vela PRD 生成` | S1 阶段：生成产品需求文档 |
+| `Vela 技术方案` | S2 阶段：生成技术方案 |
+| `Vela 代码生成` | S3 阶段：生成可运行的项目代码（含快速模式） |
+| `Vela 知识库` | 查询组件用法、API 参数、最佳实践 |

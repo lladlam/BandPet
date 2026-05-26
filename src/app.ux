@@ -16,19 +16,14 @@
 
   export default {
     onCreate() {
-      console.log('[lifecycle] [app] onCreate - App is starting...');
     },
 
     onShow() {
-      console.log('[lifecycle] [app] onShow');
     },
 
     async onHide() {
-      console.log('[lifecycle] [app] onHide - Triggering final click sync before exit.');
-
       const offlineSetting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
       if (offlineSetting === 'true') {
-        console.log('[lifecycle] [app] onHide - Offline mode enabled, skip final sync.');
         return;
       }
 
@@ -36,14 +31,13 @@
     },
 
     onDestroy() {
-      console.log('[lifecycle] [app] onDestroy');
       // 清理返回键拦截器，以防万一
       BackInterceptor.restore();
     },
 
     onError(err) {
-      console.log(`[lifecycle] [app] onError errmsg: ${err.message}`);
-      console.log(`[lifecycle] [app] onError error stack: ${err.stack}`);
+      console.error(`[lifecycle] [app] onError errmsg: ${err.message}`);
+      console.error(`[lifecycle] [app] onError error stack: ${err.stack}`);
     }
   }
 </script>

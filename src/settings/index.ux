@@ -26,7 +26,7 @@
         </div>
       </div>
     </div>
-    <div class="sync-button" onclick="handleCloudSync" show="{{ !offlineModeEnabled }}">
+    <div class="sync-button" onclick="goToSync" show="{{ !offlineModeEnabled }}">
         <text class="sync-button-text">云端同步</text>
     </div>
     <div class="about-button" onclick="goToAbout">
@@ -81,7 +81,7 @@
     width: 100%;
     flex: 1;
     align-items: center;
-    overflow-y: scroll;
+    overflow: scroll;
   }
   .settings-content {
     flex-direction: column;
@@ -143,9 +143,7 @@
 <script>
   import router from '@system.router';
   import storage from '@system.storage';
-  import prompt from '@system.prompt';
   import { CONFIG } from '../common/js/config.js';
-  import UserService from '../common/js/userService.js';
 
   // Promisified helper for storage.get to handle async/await correctly.
   const _promisifiedStorageGet = (key) => {
@@ -163,36 +161,32 @@
       time: '00:00',
       petName: '加载中...',
       userId: '加载中...',
-      offlineModeEnabled: false
+      offlineModeEnabled: false,
+      timeInterval: null
     },
     async onInit() {
       this.loadUserInfo();
       await this.loadOfflineModeSetting();
       this.updateTime();
-      setInterval(this.updateTime, 10000);
+      this.timeInterval = setInterval(this.updateTime, 10000);
     },
     async onShow() {
       await this.loadOfflineModeSetting();
     },
     async loadUserInfo() {
-      console.log('[SettingsPage] Loading user info...');
       try {
         const userInfoJSON = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.USER_INFO);
 
         if (userInfoJSON) {
-          console.log('[SettingsPage] Found user info data in storage.');
           const userInfo = JSON.parse(userInfoJSON);
           if (userInfo && userInfo.id) {
             this.petName = userInfo.pet_name || '(无名)';
             this.userId = userInfo.id || '无';
-            console.log(`[SettingsPage] Successfully loaded user info: Name='${this.petName}', ID='${this.userId}'`);
           } else {
-            console.warn('[SettingsPage] User info data was found, but it was invalid (missing id).');
             this.petName = '信息无效';
             this.userId = '无';
           }
         } else {
-            console.warn('[SettingsPage] Could not find user info in storage.');
             this.petName = '无信息';
             this.userId = '无';
         }
@@ -216,48 +210,13 @@
         this.offlineModeEnabled = false;
       }
     },
-    async handleCloudSync() {
-      if (this.offlineModeEnabled) {
-        prompt.showToast({ message: '离线模式已开启，无法云同步' });
-        return;
-      }
-
-      console.log('[SettingsPage] Starting cloud sync...');
-      prompt.showToast({ message: '正在从云端同步...' });
-      
-      try {
-        // 1. 先上传未同步的数据
-        const uploadSuccess = await UserService.triggerClickSync();
-        
-        if (!uploadSuccess) {
-          // 上传失败，保留未同步数据不变
-          console.log('[SettingsPage] Upload failed, keeping pending clicks unchanged');
-          prompt.showToast({ message: '上传失败，请稍后重试' });
-          return;
-        }
-        
-        // 2. 上传成功后，从服务器请求最新的点击次数
-        const userInfo = await UserService.ensureUserIsRegistered(true);
-        
-        if (userInfo && userInfo.total_clicks !== undefined) {
-          // 更新本地的总点击数
-          const _promisifiedStorageSet = (key, value) => new Promise((resolve, reject) => {
-            storage.set({ key, value, success: resolve, fail: (err, code) => reject(new Error(`Storage.set failed for key '${key}' with code ${code}: ${err}`)) });
-          });
-          
-          await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, userInfo.total_clicks.toString());
-          console.log(`[SettingsPage] Updated total_clicks from server: ${userInfo.total_clicks}`);
-        }
-        
-        prompt.showToast({ message: '同步成功！' });
-        
-      } catch (error) {
-        console.error('[SettingsPage] Cloud sync failed:', error);
-        prompt.showToast({ message: '同步失败，发生错误' });
-      }
-    },
     goBack() {
       router.back();
+    },
+    goToSync() {
+      router.push({
+        uri: 'sync'
+      });
     },
     goToAbout() {
       router.push({
@@ -268,6 +227,12 @@
       router.push({
         uri: 'more-options'
       });
+    },
+    onDestroy() {
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
+      }
     }
   }
 </script>

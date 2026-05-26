@@ -75,6 +75,9 @@
       },
       "more-options": {
         "component": "index"
+      },
+      "sync": {
+        "component": "index"
       }
     }
   },

@@ -12,7 +12,7 @@
         </div>
       </div>
       <div class="page-content">
-        <text class="WIP">你的开发者正在研究后端实现逻辑</text>
+        <text class="placeholder-text">功能暂未开放</text>
       </div>
     </div>
     <!-- Back Button on top layer for guaranteed clickability -->
@@ -65,9 +65,9 @@
     width: 100%;
     flex: 1; /* Take up remaining vertical space */
     align-items: center;
-    overflow-y: scroll; /* Allow content to scroll */
+    overflow: scroll; /* Allow content to scroll */
   }
-  .WIP {
+  .placeholder-text {
       margin-top: 100px;
       color: #FFFFFF;
       font-size: 30px;
@@ -92,7 +92,8 @@
 
   export default {
     data: {
-      time: '00:00'
+      time: '00:00',
+      timeInterval: null
     },
     async onInit() {
       const offlineSetting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
@@ -103,7 +104,7 @@
       }
 
       this.updateTime();
-      setInterval(this.updateTime, 10000);
+      this.timeInterval = setInterval(this.updateTime, 10000);
     },
     updateTime() {
       const now = new Date();
@@ -113,6 +114,12 @@
     },
     goBack() {
       router.back();
+    },
+    onDestroy() {
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
+      }
     }
   }
 </script>

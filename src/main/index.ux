@@ -41,7 +41,7 @@
         </div>
         
         <div class="button-container">
-          <div class="ignore-button" onclick="onIgnoreUpdate">
+          <div class="ignore-button" onclick="onIgnoreUpdate" show="{{!updateInfo.force_update}}">
             <text class="ignore-button-text">忽略此版本</text>
           </div>
           <div class="check-button" onclick="onKnowUpdate">
@@ -146,7 +146,6 @@
     justify-content: center;
     align-items: center;
     padding: 20px;
-    z-index: 999;
   }
   
   .update-content {
@@ -266,7 +265,11 @@
       petImage: '/common/Ra0.png',
       vibrationEnabled: true,
       offlineModeEnabled: false,
+      autoSyncInterval: null,
+      timeInterval: null,
+      chestTimerInterval: null,
       updateCheckInterval: null,
+      petResetTimeout: null,
       chests: [
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' },
         { claimed: false, refreshTimestamp: 0, timerDisplay: '花费: 1000' }
@@ -280,22 +283,21 @@
       this.updateTime();
       
       // 点击同步定时器（30秒）- 改为从云端同步至本地的逻辑
-      setInterval(async () => {
+      this.autoSyncInterval = setInterval(async () => {
         await this.autoSyncFromCloud();
       }, CONFIG.APP.SYNC_INTERVAL);
       
       // 时间更新定时器
-      setInterval(this.updateTime, 10000);
+      this.timeInterval = setInterval(this.updateTime, 10000);
       
       // 宝箱冷却定时器
-      setInterval(this.updateChestTimers.bind(this), 1000);
+      this.chestTimerInterval = setInterval(this.updateChestTimers.bind(this), 1000);
       
       // 更新检查定时器（1小时）
       this.updateCheckInterval = setInterval(() => {
         this.checkForUpdates();
       }, CONFIG.APP.CHECK_UPDATE_INTERVAL);
       
-      console.log('[Main] Update check interval set to:', CONFIG.APP.CHECK_UPDATE_INTERVAL, 'ms');
     },
     
     async onShow() {
@@ -304,68 +306,39 @@
       await this.loadOfflineModeSetting();
 
       if (this.offlineModeEnabled) {
-        console.log('[Main] onShow - Offline mode enabled, skip immediate update check');
         return;
       }
       
       // 立即检查更新（从强制更新页面返回时）
-      console.log('[Main] onShow - Immediate update check triggered');
       await this.checkForUpdates();
     },
     
     // 检查更新（定时调用）
     async checkForUpdates() {
-      console.log('[Main] checkForUpdates called');
-
       if (this.offlineModeEnabled) {
-        console.log('[Main] Offline mode enabled, skip update check');
         return;
       }
       
       try {
-        console.log('[Main] Periodic update check triggered...');
         const result = await UpdateManager.checkUpdate(false);
         
-        console.log('[Main] Update check result:', JSON.stringify(result));
-        
         if (result.success && result.hasUpdate && !result.skipped) {
-          console.log('[Main] Update available:', result.updateInfo);
-          
           // 保存更新信息到本地存储，供强制更新页面使用
           try {
             await UpdateManager.saveUpdateInfo(result.updateInfo);
-            console.log('[Main] Saved update info to storage:', JSON.stringify(result.updateInfo));
           } catch (e) {
             console.error('[Main] Failed to save update info:', e);
           }
           
-          // 如果是强制更新，跳转到强制更新页面
-          if (result.isForceUpdate) {
-            console.log('[Main] Force update detected, redirecting...');
-            router.replace({
-              uri: '/force-update',
-              params: {
-                updateInfo: result.updateInfo,
-                isForceUpdate: true
-              }
-            });
-          } else if (!result.ignored) {
-            // 非强制更新，跳转到普通更新页面
-            console.log('[Main] Normal update detected, redirecting to update page...');
-            router.push({
-              uri: '/update',
-              params: {
-                updateInfo: result.updateInfo,
-                isForceUpdate: false
-              }
-            });
+          if (result.isForceUpdate || !result.ignored) {
+            this.updateInfo = {
+              ...result.updateInfo,
+              force_update: result.isForceUpdate || (result.updateInfo && result.updateInfo.force_update) || false
+            };
+            this.showUpdateOverlay = true;
           }
-        } else if (result.skipped) {
-          console.log('[Main] Update check skipped (not time yet)');
         } else if (!result.success) {
-          console.log('[Main] Update check failed:', result.error);
-        } else {
-          console.log('[Main] No update available');
+          console.error('[Main] Update check failed:', result.error);
         }
       } catch (error) {
         console.error('[Main] Periodic update check failed:', error);
@@ -376,12 +349,9 @@
     
     // 用户点击"忽略此版本"
     async onIgnoreUpdate() {
-      console.log('[Main] User clicked ignore update');
-      
       if (this.updateInfo && this.updateInfo.version_code) {
         try {
           await UpdateManager.ignoreVersion(this.updateInfo.version_code);
-          console.log('[Main] Version ignored:', this.updateInfo.version_code);
           prompt.showToast({
             message: '已忽略此版本',
             duration: 1500
@@ -398,8 +368,6 @@
     
     // 用户点击"知道了"
     async onKnowUpdate() {
-      console.log('[Main] User clicked know update');
-      
       // 隐藏更新弹窗
       this.showUpdateOverlay = false;
       this.updateInfo = {};
@@ -417,7 +385,6 @@
             const serverClicks = userInfo.total_clicks || 0;
             if (serverClicks > 0) {
                 await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, serverClicks.toString());
-                console.log(`[State] Synced server clicks to local storage: ${serverClicks}`);
             }
         }
 
@@ -431,8 +398,6 @@
         // 总显示点击数 = 本地总数 + 待同步数
         this.clickCount = totalClicks + pendingClicks;
         
-        console.log(`[State] Loaded state: Total clicks=${totalClicks}, Pending clicks=${pendingClicks}, Display clicks=${this.clickCount}`);
-        
         await this.loadChestStates();
         await this.loadVibrationSetting();
     },
@@ -442,7 +407,6 @@
         const setting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.VIBRATION_ENABLED);
         // 默认开启震动，只有明确设置为 'false' 时才关闭
         this.vibrationEnabled = setting !== 'false';
-        console.log('[Main] Loaded vibration setting:', this.vibrationEnabled);
       } catch (e) {
         console.error('[Main] Failed to load vibration setting:', e);
         this.vibrationEnabled = true;
@@ -454,7 +418,6 @@
         const setting = await _promisifiedStorageGet(CONFIG.STORAGE_KEYS.OFFLINE_MODE_ENABLED);
         // 默认关闭离线模式，只有明确设置为 'true' 时才开启
         this.offlineModeEnabled = setting === 'true';
-        console.log('[Main] Loaded offline mode setting:', this.offlineModeEnabled);
       } catch (e) {
         console.error('[Main] Failed to load offline mode setting:', e);
         this.offlineModeEnabled = false;
@@ -463,10 +426,7 @@
     
     // 【新增】自动从云端同步至本地的逻辑
     async autoSyncFromCloud() {
-      console.log('[Main] Starting auto sync from cloud...');
-
       if (this.offlineModeEnabled) {
-        console.log('[Main] Offline mode enabled, skip auto sync from cloud');
         return;
       }
       
@@ -476,7 +436,6 @@
         
         if (!uploadSuccess) {
           // 上传失败，保留未同步数据不变
-          console.log('[Main] Upload failed, keeping pending clicks unchanged');
           return;
         }
         
@@ -490,7 +449,6 @@
           });
           
           await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, userInfo.total_clicks.toString());
-          console.log(`[Main] Updated total_clicks from server: ${userInfo.total_clicks}`);
         }
         
         // 3. 刷新UI显示
@@ -511,7 +469,6 @@
         const pendingClicks = parseInt(pendingClicksStr) || 0;
 
         this.clickCount = totalClicks + pendingClicks;
-        console.log(`[Main] Refreshed clickCount: ${totalClicks} + ${pendingClicks} = ${this.clickCount}`);
       } catch (e) {
         console.error('[Main] Failed to refresh click count:', e);
       }
@@ -582,7 +539,13 @@
         }
         
         this.petImage = Math.random() < 0.5 ? '/common/Ra1.png' : '/common/Ra2.png';
-        setTimeout(() => { this.petImage = '/common/Ra0.png'; }, 200);
+        if (this.petResetTimeout) {
+          clearTimeout(this.petResetTimeout);
+        }
+        this.petResetTimeout = setTimeout(() => {
+          this.petImage = '/common/Ra0.png';
+          this.petResetTimeout = null;
+        }, 200);
     },
 
     async claimChest(index) {
@@ -611,10 +574,25 @@
     },
     
     onDestroy() {
-      // 清理更新检查定时器
+      if (this.autoSyncInterval) {
+        clearInterval(this.autoSyncInterval);
+        this.autoSyncInterval = null;
+      }
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
+      }
+      if (this.chestTimerInterval) {
+        clearInterval(this.chestTimerInterval);
+        this.chestTimerInterval = null;
+      }
       if (this.updateCheckInterval) {
         clearInterval(this.updateCheckInterval);
         this.updateCheckInterval = null;
+      }
+      if (this.petResetTimeout) {
+        clearTimeout(this.petResetTimeout);
+        this.petResetTimeout = null;
       }
     }
   }

@@ -35,7 +35,6 @@ class BackInterceptor {
       }
     };
     
-    console.log('返回拦截器启用:', reason);
   }
   
   // 禁用拦截
@@ -49,7 +48,6 @@ class BackInterceptor {
       this.originalBack = null;
     }
     
-    console.log('返回拦截器禁用');
   }
   
   // 拦截返回按钮

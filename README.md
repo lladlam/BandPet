@@ -5,7 +5,7 @@
 [**本项目并不由米坛社区开源项目支持计划提供支持**](https://www.bandbbs.cn/resources/5022/)
 
 # 项目介绍
-版本：0.4.3  
+版本：0.4.4  
 语言：中文  
 目标设备：小米手环 
 类型：快应用 / AIoT（aiot-toolkit）
@@ -41,10 +41,10 @@ BandPet 是面向智能手表的轻量化宠物点击与集换应用。源码位
 - src/ — 源码
   - src/manifest.json — 路由与权限（入口 main，deviceTypeList 包含 "watch"）
   - src/app.ux — 全局生命周期与错误/日志入口
-  - src/<page>/index.ux — 每个页面视图与页面逻辑（如 more, leaderboard, exchange, market, customize, settings, activate, about, naming）
+  - src/<page>/index.ux — 每个页面视图与页面逻辑（如 more, leaderboard, exchange, market, customize, settings, sync, about, naming）
   - src/common/js/api-service.js — 网络层与后端函数封装（所有后端交互必须通过此模块）
   - src/common/js/config.js — 全局常量与存储键（例如 STORAGE_KEYS、SYNC_INTERVAL、MAX_CLICKS_PER_BATCH）（不要直接使用里面的服务器地址！）
-  - src/common/js/auth.js / auth-guard.js — 鉴权相关
+  - src/common/js/storage-utils.js — 本地存储 Promise 封装
   - src/InputMethod/ — 内置输入法资源（数字键盘、QWERTY）
 
 二、核心设计与数据流要点（必须遵守）
@@ -53,7 +53,7 @@ BandPet 是面向智能手表的轻量化宠物点击与集换应用。源码位
 - 全局常量与存储键必须在 `src/common/js/config.js` 中定义（例如 `STORAGE_KEYS.PENDING_CLICKS`）。
 - 点击计数（主玩法）：
   - 在内存中累积（例如单例管理器），避免频繁写入 `@system.storage`。
-  - 按 `config.js` 中的 `SYNC_INTERVAL`（默认 5 分钟）或达到 `MAX_CLICKS_PER_BATCH` 时批量调用 `ApiService.syncClicks()` 上报。
+  - 按 `config.js` 中的 `SYNC_INTERVAL`（默认 30 秒）或达到 `MAX_CLICKS_PER_BATCH` 时批量调用 `ApiService.syncClicks()` 上报。
   - 仅在必要时（切后台、定时 flush、退出）批量写入本地存储作为持久化备份。
 - UI 风格：深色/极简。主界面：黑背景、顶部时间、中间宠物名占位，点击宠物计数，底部左侧更多按钮、右侧胶囊显示点击数。
 
@@ -67,7 +67,7 @@ BandPet 是面向智能手表的轻量化宠物点击与集换应用。源码位
 
 四、网络与 API 规范（必须遵守）
 - 在修改或生成网络相关代码前，**必须**打开并参考 `src/common/js/api-service.js`（不要把 README 示例值当真实配置）。
-- 如需可配置 base URL，请新增或更新 `src/common/js/network-config.js` 或在 `api-service.js` 顶部声明常量，并在提交说明中记录变更原因与影响范围。
+- 如需调整 base URL，请更新 `src/common/js/config.js` 中的 `CONFIG.SERVER.BASE_URL`，并在提交说明中记录变更原因与影响范围。
 - 新增接口名或后端函数，更新 `api-service.js` 并同步更新 `config.js`（如需要的存储键/超时常量）。
 
 五、实现细节与示例策略（点击上报部分）

@@ -81,7 +81,7 @@
     width: 100%;
     flex: 1;
     align-items: center;
-    overflow-y: scroll; 
+    overflow: scroll; 
   }
   .announcement-list {
     width: 90%;
@@ -143,17 +143,18 @@
 
 <script>
   import router from '@system.router';
-  import ApiService from '../common/js/api-service.js';
+  import AnnouncementManager from '../common/js/announcement-manager.js';
 
   export default {
     data: {
       time: '00:00',
       announcements: [],
-      statusMessage: '正在加载...'
+      statusMessage: '正在加载...',
+      timeInterval: null
     },
     onInit() {
       this.updateTime();
-      setInterval(this.updateTime, 10000);
+      this.timeInterval = setInterval(this.updateTime, 10000);
       this.fetchAnnouncements();
     },
     updateTime() {
@@ -163,10 +164,7 @@
       this.time = `${hours}:${minutes}`;
     },
     async fetchAnnouncements() {
-      console.log('[Announcement] Fetching announcements...');
-      const result = await ApiService.getAnnouncements(10);
-      
-      console.log('[Announcement] API Response:', JSON.stringify(result));
+      const result = await AnnouncementManager.getAnnouncements();
 
       if (result.success && result.announcements && result.announcements.length > 0) {
         this.announcements = result.announcements;
@@ -191,6 +189,12 @@
     },
     goBack() {
       router.back();
+    },
+    onDestroy() {
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
+      }
     }
   }
 </script>

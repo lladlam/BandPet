@@ -94,13 +94,14 @@
     data: {
       time: '00:00',
       offlineModeEnabled: false,
-      menuItems: []
+      menuItems: [],
+      timeInterval: null
     },
     async onInit() {
       this.updateTime();
       await this.loadOfflineModeSetting();
       this.rebuildMenuItems();
-      setInterval(this.updateTime, 10000);
+      this.timeInterval = setInterval(this.updateTime, 10000);
     },
     async onShow() {
       await this.loadOfflineModeSetting();
@@ -144,6 +145,12 @@
     },
     goTo(page) {
       router.push({ uri: page });
+    },
+    onDestroy() {
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
+      }
     }
   }
 </script>

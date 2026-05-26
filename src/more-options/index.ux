@@ -17,7 +17,7 @@
           <switch 
             checked="{{ vibrationEnabled }}" 
             class="vibration-switch"
-            @change="onVibrationChange">
+            onchange="onVibrationChange">
           </switch>
         </div>
 
@@ -27,7 +27,7 @@
           <switch
             checked="{{ offlineModeEnabled }}"
             class="vibration-switch"
-            @change="onOfflineModeChange">
+            onchange="onOfflineModeChange">
           </switch>
         </div>
         
@@ -85,7 +85,7 @@
     width: 100%;
     flex: 1;
     align-items: center;
-    overflow-y: scroll;
+    overflow: scroll;
   }
   .settings-list {
     flex-direction: column;
@@ -163,13 +163,14 @@
     data: {
       time: '00:00',
       vibrationEnabled: true,
-      offlineModeEnabled: false
+      offlineModeEnabled: false,
+      timeInterval: null
     },
     
     onInit() {
       this.updateTime();
       this.loadSettings();
-      setInterval(this.updateTime, 10000);
+      this.timeInterval = setInterval(this.updateTime, 10000);
     },
     
     updateTime() {
@@ -187,8 +188,6 @@
         this.vibrationEnabled = setting !== 'false';
         // 默认关闭离线模式，只有明确设置为 'true' 时才开启
         this.offlineModeEnabled = offlineSetting === 'true';
-        console.log('[MoreOptions] Loaded vibration setting:', this.vibrationEnabled);
-        console.log('[MoreOptions] Loaded offline mode setting:', this.offlineModeEnabled);
       } catch (e) {
         console.error('[MoreOptions] Failed to load settings:', e);
         this.vibrationEnabled = true;
@@ -204,7 +203,6 @@
           CONFIG.STORAGE_KEYS.VIBRATION_ENABLED, 
           this.vibrationEnabled.toString()
         );
-        console.log('[MoreOptions] Saved vibration setting:', this.vibrationEnabled);
         
         // 开启时给用户一个震动反馈
         if (this.vibrationEnabled) {
@@ -238,7 +236,6 @@
           });
         }
 
-        console.log('[MoreOptions] Saved offline mode setting:', this.offlineModeEnabled);
       } catch (e) {
         console.error('[MoreOptions] Failed to save offline mode setting:', e);
       }
@@ -250,8 +247,6 @@
     
     // 检查更新
     async checkUpdate() {
-      console.log('[MoreOptions] Checking for updates...');
-
       if (this.offlineModeEnabled) {
         prompt.showToast({
           message: '离线模式下不可检查更新',
@@ -268,8 +263,6 @@
         
         const currentVersionCode = CONFIG.APP.VERSION_CODE;
         const result = await ApiService.checkAppUpdate(currentVersionCode);
-        
-        console.log('[MoreOptions] Update check result:', JSON.stringify(result));
         
         if (result.success && result.hasUpdate && result.updateInfo) {
           const versionName = result.updateInfo.version_name || '新版本';
@@ -289,6 +282,13 @@
           message: '检查更新失败',
           duration: 1500
         });
+      }
+    },
+
+    onDestroy() {
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
       }
     }
   }

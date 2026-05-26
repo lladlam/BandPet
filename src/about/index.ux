@@ -74,7 +74,7 @@
     width: 100%;
     flex: 1;
     align-items: center;
-    overflow-y: scroll;
+    overflow: scroll;
   }
 
   /* Page-specific styles */
@@ -114,11 +114,12 @@
   import router from '@system.router';
   export default {
     data: {
-      time: '00:00'
+      time: '00:00',
+      timeInterval: null
     },
     onInit() {
       this.updateTime();
-      setInterval(this.updateTime, 60000);
+      this.timeInterval = setInterval(this.updateTime, 60000);
     },
     updateTime() {
       const now = new Date();
@@ -128,6 +129,12 @@
     },
     goBack() {
       router.back();
+    },
+    onDestroy() {
+      if (this.timeInterval) {
+        clearInterval(this.timeInterval);
+        this.timeInterval = null;
+      }
     }
   }
 </script>
