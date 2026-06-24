@@ -673,6 +673,7 @@
   <script>
     const token = localStorage.getItem('admin_token');
     const API_BASE = window.location.hostname === 'localhost' ? '' : `http://${window.location.hostname}:7718`;
+    const GUI_BASE = window.location.hostname === 'localhost' ? '' : `http://${window.location.hostname}:7719`;
 
     function updateTime() {
       const now = new Date();
@@ -687,7 +688,7 @@
         return;
       }
       try {
-        const res = await fetch(`${API_BASE}/admin/check`, {
+        const res = await fetch(`${GUI_BASE}/admin/check`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
