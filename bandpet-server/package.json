@@ -2,9 +2,10 @@
   "name": "bandpet-server",
   "version": "1.0.0",
   "description": "BandPet server application",
-  "main": "index.js",
+  "type": "module",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.21.2",
