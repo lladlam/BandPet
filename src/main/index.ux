@@ -451,10 +451,6 @@
         
         if (userInfo && userInfo.total_clicks !== undefined) {
           // 更新本地的总点击数
-          const _promisifiedStorageSet = (key, value) => new Promise((resolve, reject) => {
-            storage.set({ key, value, success: resolve, fail: (err, code) => reject(new Error(`Storage.set failed for key '${key}' with code ${code}: ${err}`)) });
-          });
-          
           await _promisifiedStorageSet(CONFIG.STORAGE_KEYS.TOTAL_CLICKS, userInfo.total_clicks.toString());
         }
         

@@ -4,7 +4,7 @@ import { deleteStorageKey, getStorageValue, setStorageValue } from './storage-ut
 
 class UpdateManager {
   constructor() {
-    this.checkInterval = CONFIG.APP.CHECK_UPDATE_INTERVAL || 360000; // 
+    this.checkInterval = CONFIG.APP.CHECK_UPDATE_INTERVAL || 3600000; //
   }
 
   async _isOfflineModeEnabled() {

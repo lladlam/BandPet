@@ -236,6 +236,10 @@
         if (this.showKeyboard) {
           this.toggleKeyboard(false);
         } else {
+          if (this.navigateBackTimeout) {
+            clearTimeout(this.navigateBackTimeout);
+            this.navigateBackTimeout = null;
+          }
           router.back();
         }
       },
