@@ -1,7 +1,7 @@
 <template>
-  <div class="container">
+  <div class="container {{ screenClass }}">
     <text class="time">{{ time }}</text>
-    
+
     <div class="chest-row">
       <div class="chest" onclick="claimChest(0, $event)">
         <text class="chest-label">宝箱</text>
@@ -19,7 +19,7 @@
       <image class="pet-image" src="{{ petImage }}"></image>
       <text class="pet-name">{{ petName }}</text>
     </div>
-    
+
     <div class="bottom-bar">
       <image src="../common/more.png" class="more-button" onclick="openMore($event)"></image>
       <div class="click-counter">
@@ -61,12 +61,19 @@
     flex-direction: column;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 0; /* Reduced padding */
-    overflow: hidden; /* Disable scrolling */
+    padding: 10px 0;
+    overflow: hidden;
+  }
+  /* 圆形屏幕安全区域 */
+  .screen-circle {
+    padding-top: 40px;
+    padding-bottom: 40px;
+    padding-left: 15px;
+    padding-right: 15px;
   }
   .time {
     color: #FFFFFF;
-    font-size: 24px; /* Restored font size */
+    font-size: 24px;
     text-align: center;
     width: 100%;
   }
@@ -248,6 +255,7 @@
   import UserService from '../common/js/userService.js';
   import UpdateManager from '../common/js/update-manager.js';
   import { CONFIG } from '../common/js/config.js';
+  import ScreenUtils from '../common/js/screen-utils.js';
 
   const _promisifiedStorageGet = (key) => new Promise((resolve) => {
     storage.get({ key, success: (data) => resolve(data), fail: () => resolve(null) });
@@ -276,9 +284,12 @@
       ],
       showUpdateOverlay: false,
       updateInfo: {},
+      screenClass: 'screen-rect',
     },
 
-    onInit() {
+    async onInit() {
+      await ScreenUtils.init();
+      this.screenClass = ScreenUtils.getScreenClass();
       this.loadInitialState();
       this.updateTime();
       this._syncing = false;
