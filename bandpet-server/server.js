@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import apiRouter from './routes/api.js';
+import adminRouter from './routes/admin.js';
 
 dotenv.config();
 
@@ -77,6 +78,8 @@ guiApp.get('/admin/check', (req, res) => {
 guiApp.get('/admin/', (req, res) => {
   res.sendFile('admin.html', { root: 'public' });
 });
+
+guiApp.use('/admin/api', adminRouter);
 
 guiApp.get('*', (req, res) => {
   res.sendFile('login.html', { root: 'public' });

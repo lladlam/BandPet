@@ -5,3 +5,4 @@ vela开发文档.md
 .DS_Store
 *.log
 .github/
+dist/

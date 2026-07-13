@@ -281,23 +281,30 @@
     onInit() {
       this.loadInitialState();
       this.updateTime();
-      
+      this._syncing = false;
+
       // 点击同步定时器（30秒）- 改为从云端同步至本地的逻辑
       this.autoSyncInterval = setInterval(async () => {
-        await this.autoSyncFromCloud();
+        if (this._syncing) return;
+        this._syncing = true;
+        try {
+          await this.autoSyncFromCloud();
+        } finally {
+          this._syncing = false;
+        }
       }, CONFIG.APP.SYNC_INTERVAL);
-      
+
       // 时间更新定时器
       this.timeInterval = setInterval(this.updateTime, 10000);
-      
+
       // 宝箱冷却定时器
       this.chestTimerInterval = setInterval(this.updateChestTimers.bind(this), 1000);
-      
+
       // 更新检查定时器（1小时）
       this.updateCheckInterval = setInterval(() => {
         this.checkForUpdates();
       }, CONFIG.APP.CHECK_UPDATE_INTERVAL);
-      
+
     },
     
     async onShow() {

@@ -184,9 +184,10 @@ class UserService {
     try {
       const pendingClicksData = await this._storageGet(CONFIG.STORAGE_KEYS.PENDING_CLICKS);
       let currentClicks = parseInt(pendingClicksData) || 0;
-      
-      const newClicks = currentClicks + amount;
-      
+
+      let newClicks = currentClicks + amount;
+      if (newClicks < 0) newClicks = 0;
+
       await this._storageSet(CONFIG.STORAGE_KEYS.PENDING_CLICKS, newClicks.toString());
       return newClicks;
     } catch (e) {

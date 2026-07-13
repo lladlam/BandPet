@@ -105,7 +105,7 @@ class ApiService {
       const result = await this.request('check_pet_name', {
         pet_name: petName
       });
-      return { success: true, ...result };
+      return result;
     } catch (error) {
       console.error('检查宠物名可用性时发生网络错误:', error);
       return { success: false, error: error.message, isAvailable: false };
