@@ -6,3 +6,4 @@ vela开发文档.md
 *.log
 .github/
 dist/
+sign/
