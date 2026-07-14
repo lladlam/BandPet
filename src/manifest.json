@@ -24,9 +24,12 @@
     },
     {
         "name": "system.vibrator"
-    }, 
+    },
     {
       "name": "system.prompt"
+    },
+    {
+      "name": "system.interconnect"
     }
   ],
   "permissions": [

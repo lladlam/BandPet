@@ -1,6 +1,6 @@
 // api-service.js
-import fetch from '@system.fetch';
 import { CONFIG } from './config.js';
+import CommService from './comm-service.js';
 
 class ApiService {
   constructor() {
@@ -14,36 +14,20 @@ class ApiService {
   // 通用请求方法 - 通过中转服务器转发
   async request(action, data = {}) {
     const url = `${this.baseUrl}/api`;
-    
+
     const options = {
-      url,
       method: 'POST',
-      header: this.baseHeaders,
-      responseType: 'json'
+      headers: this.baseHeaders,
+      body: { action, ...data }
     };
 
-    options.data = JSON.stringify({ action, ...data });
-
-    return new Promise((resolve, reject) => {
-      fetch.fetch({
-        ...options,
-        success: (response) => {
-          const responseData = response.data || {};
-
-          if (response.code >= 200 && response.code < 300) {
-            resolve(responseData)
-          } else {
-            console.error(`HTTP Error: ${response.code}`, response);
-            reject(new Error(`HTTP ${response.code}: ${JSON.stringify(responseData)}`))
-          }
-        },
-        fail: (error, code) => {
-          // DETAILED LOGGING FOR NETWORK FAILURES
-          console.error(`[ApiService] Request Failed. Code: ${code}, Error: ${JSON.stringify(error)}`);
-          reject(new Error(`Request failed: ${error.data || 'Connection is invalid'}`))
-        }
-      })
-    })
+    try {
+      const responseData = await CommService.request(url, options);
+      return responseData;
+    } catch (error) {
+      console.error(`[ApiService] Request Failed:`, error.message);
+      throw error;
+    }
   }
 
   // 获取排行榜
