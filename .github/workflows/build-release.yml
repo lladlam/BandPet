@@ -1,0 +1,197 @@
+name: Build and Release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 防止两个提交同时计算出相同的版本序号。
+concurrency:
+  group: bandpet-build-release
+  cancel-in-progress: false
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+
+      - name: Read app version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="$(jq -r '.versionName // empty' src/manifest.json)"
+          if [[ -z "$VERSION" || "$VERSION" == "null" ]]; then
+            echo "::error::src/manifest.json 中缺少 versionName"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "检测到 BandPet 版本：$VERSION"
+
+      - name: Calculate release name
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Release 列表用于识别标题，Git 标签用于避免旧标签或无 Release 标签冲突。
+          gh release list \
+            --repo "$GITHUB_REPOSITORY" \
+            --limit 1000 \
+            --json name,tagName > releases.json
+          git tag --list > tags.txt
+
+          python3 <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          version = os.environ["VERSION"].strip()
+          escaped = re.escape(version)
+          numbers = []
+
+          releases = json.loads(Path("releases.json").read_text(encoding="utf-8"))
+          values = []
+          for release in releases:
+              values.append(release.get("name") or "")
+              values.append(release.get("tagName") or "")
+
+          values.extend(Path("tags.txt").read_text(encoding="utf-8").splitlines())
+
+          exact_patterns = [
+              re.compile(rf"^v?{escaped}$", re.IGNORECASE),
+          ]
+          numbered_patterns = [
+              re.compile(rf"^v?{escaped}\s+v(\d+)$", re.IGNORECASE),
+              re.compile(rf"^v?{escaped}[-_.]?v(\d+)$", re.IGNORECASE),
+              re.compile(rf"^v?{escaped}-build[._-](\d+)$", re.IGNORECASE),
+          ]
+
+          for raw in values:
+              value = raw.strip()
+              if not value:
+                  continue
+
+              if any(pattern.fullmatch(value) for pattern in exact_patterns):
+                  numbers.append(1)
+                  continue
+
+              for pattern in numbered_patterns:
+                  match = pattern.fullmatch(value)
+                  if match:
+                      numbers.append(int(match.group(1)))
+                      break
+
+          build_number = max(numbers, default=0) + 1
+
+          if build_number == 1:
+              title = version
+              tag = f"v{version}"
+          else:
+              title = f"{version} v{build_number}"
+              tag = f"v{version}-build.{build_number}"
+
+          safe_name = re.sub(r"[^0-9A-Za-z._-]+", "-", title).strip("-")
+
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          with output_path.open("a", encoding="utf-8") as output:
+              output.write(f"build_number={build_number}\n")
+              output.write(f"title={title}\n")
+              output.write(f"tag={tag}\n")
+              output.write(f"safe_name={safe_name}\n")
+
+          print(f"Release 标题：{title}")
+          print(f"Git 标签：{tag}")
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build RPK
+        run: npm run build
+
+      - name: Collect release files
+        env:
+          RELEASE_SAFE_NAME: ${{ steps.release.outputs.safe_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! -d dist ]]; then
+            echo "::error::构建完成后没有生成 dist 目录"
+            exit 1
+          fi
+
+          mapfile -d '' RPK_FILES < <(find dist -type f -iname '*.rpk' -print0)
+          if (( ${#RPK_FILES[@]} == 0 )); then
+            echo "::error::dist 目录内没有找到 .rpk 构建产物"
+            find dist -maxdepth 4 -type f -print || true
+            exit 1
+          fi
+
+          mkdir -p release-assets
+          for file in "${RPK_FILES[@]}"; do
+            cp "$file" "release-assets/$(basename "$file")"
+          done
+
+          # 同时附带完整 dist 压缩包，便于保留构建产生的其它文件。
+          tar -czf "release-assets/BandPet-${RELEASE_SAFE_NAME}-dist.tar.gz" -C dist .
+
+          echo "待发布文件："
+          find release-assets -maxdepth 1 -type f -print
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BandPet-${{ steps.release.outputs.safe_name }}
+          path: dist/**
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.title }}
+          APP_VERSION: ${{ steps.version.outputs.version }}
+          BUILD_NUMBER: ${{ steps.release.outputs.build_number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          NOTES=$(cat <<EOF
+          BandPet 自动构建版本。
+
+          - 应用版本：${APP_VERSION}
+          - 同版本构建序号：${BUILD_NUMBER}
+          - 源提交：${GITHUB_SHA}
+          EOF
+          )
+
+          gh release create "$RELEASE_TAG" \
+            release-assets/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "$RELEASE_TITLE" \
+            --notes "$NOTES"
